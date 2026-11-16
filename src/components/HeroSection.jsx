@@ -68,7 +68,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
   };
 
   return (
-    <section style={{ padding: '4.5rem 0 5rem 0', position: 'relative', overflow: 'hidden', backgroundColor: 'var(--bg-canvas)' }}>
+    <section className="hero-section-root" style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'var(--bg-canvas)' }}>
       
       {/* Background Soft Blue Ambient Mesh */}
       <div style={{
@@ -83,24 +83,12 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
       }} />
 
       <div className="container" style={{ position: 'relative', zIndex: 1 }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr 1.25fr',
-          gap: '3.5rem',
-          alignItems: 'center'
-        }} className="hero-grid-split">
+        <div className="hero-grid-split">
           
           {/* SISI KIRI: Headline, Subtext, CTAs, Checkmarks */}
           <div>
             {/* Main Headline */}
-            <h1 style={{
-              fontSize: 'clamp(2.5rem, 4vw, 3.75rem)',
-              lineHeight: 1.12,
-              fontWeight: 800,
-              letterSpacing: '-0.04em',
-              color: 'var(--text-primary)',
-              marginBottom: '1.5rem'
-            }}>
+            <h1 className="hero-main-title">
               Jual Beli Hasil Pertanian Skala Besar dengan{' '}
               <span style={{ color: 'var(--accent-primary)' }}>
                 Penawaran Terikat
@@ -108,26 +96,17 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
             </h1>
 
             {/* Sub-headline */}
-            <p style={{
-              fontSize: '1.12rem',
-              lineHeight: 1.65,
-              color: 'var(--text-secondary)',
-              marginBottom: '2.25rem',
-              maxWidth: '520px'
-            }}>
+            <p className="hero-subtext">
               AgriConnect menghubungkan petani skala besar langsung ke distributor dan pabrik. Kunci harga, volume, dan jadwal pengambilan via kesepakatan digital yang mengikat.
             </p>
 
             {/* Button Row matching Reference Buttons */}
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '2.25rem' }}>
+            <div className="hero-btn-row">
               {/* Primary Pill Button with Circular Arrow Badge */}
               <button
                 onClick={() => onRoleSelect('petani')}
-                className="btn btn-primary"
+                className="btn btn-primary hero-btn-cta"
                 style={{
-                  fontSize: '0.96rem',
-                  padding: '0.75rem 1.6rem',
-                  fontWeight: 600,
                   borderRadius: '9999px',
                   boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
                 }}
@@ -140,34 +119,24 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
 
               {/* Ghost Demo Button */}
               <button
-                onClick={() => onOpenSimulation()}
-                className="btn-ghost-demo"
+                onClick={() => onOpenSimulation && onOpenSimulation()}
+                className="btn-ghost-demo hero-btn-demo"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem',
-                  fontSize: '0.96rem',
-                  padding: '0.75rem 1.25rem',
                   cursor: 'pointer',
                   border: 'none',
                   background: 'transparent'
                 }}
               >
                 <PlayCircle size={22} color="var(--accent-primary)" weight="fill" />
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Lihat Demo Alur</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Jelajahi Pasar Grosir</span>
               </button>
             </div>
 
             {/* Trust Checkmarks Row */}
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1.5rem',
-              alignItems: 'center',
-              fontSize: '0.86rem',
-              color: 'var(--text-secondary)',
-              fontWeight: 500
-            }}>
+            <div className="hero-trust-row">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <CheckCircle size={18} color="var(--accent-primary)" weight="fill" />
                 <span>14.800+ Ton Terikat</span>
@@ -184,10 +153,10 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
           </div>
 
           {/* SISI KANAN: Floating 3D Tilted Dashboard Tablet with 3D Crystal and Orbs */}
-          <div style={{ position: 'relative' }}>
+          <div className="hero-mockup-wrapper" style={{ position: 'relative' }}>
             
             {/* Glowing Deep Blue Planet/Sphere behind top right */}
-            <div style={{
+            <div className="hero-ambient-orb orb-primary" style={{
               position: 'absolute',
               top: '-45px',
               right: '-30px',
@@ -201,7 +170,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
             }} />
 
             {/* Small floating orb */}
-            <div style={{
+            <div className="hero-ambient-orb orb-secondary" style={{
               position: 'absolute',
               top: '40px',
               right: '-60px',
@@ -214,7 +183,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
             }} />
 
             {/* Faceted Blue 3D Crystal at bottom-left */}
-            <div style={{
+            <div className="hero-ambient-crystal" style={{
               position: 'absolute',
               bottom: '-35px',
               left: '-25px',
@@ -238,21 +207,19 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
                 position: 'relative',
                 zIndex: 1,
                 padding: '1.25rem',
-                transform: 'perspective(1400px) rotateY(-5deg) rotateX(2deg)',
                 transition: 'transform 0.4s ease, background-color 0.3s ease, border-color 0.3s ease'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'perspective(1400px) rotateY(-2deg) rotateX(1deg)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'perspective(1400px) rotateY(-5deg) rotateX(2deg)'}
+              onMouseEnter={(e) => {
+                if (window.innerWidth > 960) e.currentTarget.style.transform = 'perspective(1400px) rotateY(-2deg) rotateX(1deg)';
+              }}
+              onMouseLeave={(e) => {
+                if (window.innerWidth > 960) e.currentTarget.style.transform = 'perspective(1400px) rotateY(-5deg) rotateX(2deg)';
+              }}
             >
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '170px 1fr',
-                gap: '1.25rem',
-                minHeight: '480px'
-              }} className="tablet-inner-grid">
+              <div className="tablet-inner-grid">
                 
                 {/* Left Mini Sidebar inside Tablet */}
-                <div style={{
+                <div className="tablet-mini-sidebar" style={{
                   borderRight: '1px solid var(--border-subtle)',
                   paddingRight: '1rem',
                   display: 'flex',

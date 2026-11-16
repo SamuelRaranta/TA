@@ -111,14 +111,14 @@ export default function GlassNavbar({
               Jelajahi Komoditas
             </a>
 
-            {/* 4. Alur Binding */}
+            {/* 4. Portal Akses */}
             <a 
-              href="#alur-binding" 
+              href="#portal-akses" 
               style={{ color: 'var(--text-secondary)', textDecoration: 'none', transition: 'color 0.2s ease' }}
               onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
               onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
             >
-              Alur Binding
+              Akses Portal
             </a>
           </div>
 
@@ -231,11 +231,11 @@ export default function GlassNavbar({
               Jelajahi Komoditas
             </a>
             <a 
-              href="#alur-binding" 
+              href="#portal-akses" 
               onClick={() => setMobileMenuOpen(false)}
               style={{ color: 'var(--text-primary)', textDecoration: 'none', fontSize: '0.92rem', fontWeight: 600 }}
             >
-              Alur Binding
+              Akses Portal
             </a>
 
             <button

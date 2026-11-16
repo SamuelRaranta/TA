@@ -1,18 +1,59 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import GlassNavbar from './components/GlassNavbar';
 import HeroSection from './components/HeroSection';
 import MarketPriceTicker from './components/MarketPriceTicker';
-import BindingFlowSection from './components/BindingFlowSection';
 import CommodityShowcase from './components/CommodityShowcase';
 import FeaturesSection from './components/FeaturesSection';
 import PortalAccessSection from './components/PortalAccessSection';
 import Footer from './components/Footer';
-import BindingSimulationModal from './components/BindingSimulationModal';
-import AuthModal from './components/AuthModal';
 import AuthPage from './components/AuthPage';
 import FarmerDashboard from './components/farmer/FarmerDashboard';
 import BuyerDashboard from './components/buyer/BuyerDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
+import { supabase } from './lib/supabaseClient';
+
+// Cache sesi dibersihkan total (generik + per-role) agar tidak ada identitas basi lintas peran.
+const clearAllAuthCache = () => {
+  try {
+    localStorage.removeItem('agriconnect_auth_user');
+    localStorage.removeItem('agriconnect_auth_user_petani');
+    localStorage.removeItem('agriconnect_auth_user_pembeli');
+    localStorage.removeItem('agriconnect_auth_user_admin');
+  } catch (e) {}
+};
+
+const readCachedUserForRole = (role) => {
+  try {
+    const keys = role
+      ? [`agriconnect_auth_user_${role}`, 'agriconnect_auth_user']
+      : ['agriconnect_auth_user'];
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const p = JSON.parse(raw);
+      if (p?.id && (!p?.role || !role || String(p.role).toLowerCase() === String(role).toLowerCase())) return p;
+    }
+  } catch (e) {}
+  return null;
+};
+
+const ROLE_FOR_VIEW = {
+  'farmer-dashboard': 'petani',
+  'buyer-dashboard': 'pembeli',
+  'admin-dashboard': 'admin'
+};
+
+const VIEW_FOR_ROLE = {
+  petani: 'farmer-dashboard',
+  pembeli: 'buyer-dashboard',
+  admin: 'admin-dashboard'
+};
+
+const HASH_FOR_VIEW = {
+  'farmer-dashboard': '#/dashboard/petani',
+  'buyer-dashboard': '#/dashboard/pembeli',
+  'admin-dashboard': '#/dashboard/admin'
+};
 
 class GlobalErrorBoundary extends React.Component {
   constructor(props) {
@@ -63,18 +104,62 @@ function AppContent() {
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('agriconnect_theme') || 'light';
   });
+  const isRecoveryPending = () => {
+    try {
+      return sessionStorage.getItem('agriconnect_recovery_pending') === '1';
+    } catch (e) {
+      return false;
+    }
+  };
+  const isRecoveryUrl = (hash, search) => {
+    return (
+      hash.includes('type=recovery') ||
+      hash.includes('access_token=') ||
+      hash.includes('token_hash=') ||
+      search.includes('type=recovery') ||
+      search.includes('token_hash=') ||
+      search.includes('code=') ||
+      hash.includes('code=') ||
+      hash.startsWith('#/auth') ||
+      hash.startsWith('#/reset-password') ||
+      hash.startsWith('#/update-password')
+    );
+  };
+
   const [currentView, setCurrentView] = useState(() => {
-    const hash = window.location.hash;
-    if (hash === '#/login') return 'login';
-    if (hash === '#/signup' || hash === '#/register') return 'signup';
-    if (hash === '#/dashboard/petani' || hash === '#/petani') return 'farmer-dashboard';
-    if (hash === '#/dashboard/pembeli' || hash === '#/pembeli') return 'buyer-dashboard';
-    if (hash === '#/dashboard/admin' || hash === '#/admin') return 'admin-dashboard';
+    const hash = window.location.hash || '';
+    const search = window.location.search || '';
+    if (isRecoveryUrl(hash, search)) return 'login';
+    if (hash.startsWith('#/login')) return 'login';
+    if (hash.startsWith('#/signup') || hash.startsWith('#/register')) return 'signup';
+    if (hash.startsWith('#/dashboard/petani') || hash.startsWith('#/petani')) return 'farmer-dashboard';
+    if (hash.startsWith('#/dashboard/pembeli') || hash.startsWith('#/pembeli')) return 'buyer-dashboard';
+    if (hash.startsWith('#/dashboard/admin') || hash.startsWith('#/admin')) return 'admin-dashboard';
     return 'home';
   });
-  const [simulationOpen, setSimulationOpen] = useState(false);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [selectedCommodity, setSelectedCommodity] = useState(null);
+  const [authVersion, setAuthVersion] = useState(0);
+  // Optimistis: jika cache cocok dengan view dari URL, render dashboard langsung
+  // sambil verifikasi background — tanpa kunci layar tiap refresh.
+  const [dashboardAccess, setDashboardAccess] = useState(() => {
+    const hash = window.location.hash || '';
+    let view = null;
+    if (hash.startsWith('#/dashboard/petani') || hash.startsWith('#/petani')) view = 'farmer-dashboard';
+    else if (hash.startsWith('#/dashboard/pembeli') || hash.startsWith('#/pembeli')) view = 'buyer-dashboard';
+    else if (hash.startsWith('#/dashboard/admin') || hash.startsWith('#/admin')) view = 'admin-dashboard';
+    if (!view) return { view: null, status: 'idle' };
+    const cached = readCachedUserForRole(ROLE_FOR_VIEW[view]);
+    return cached?.id
+      ? { view, status: 'checking', optimistic: true }
+      : { view: null, status: 'checking' };
+  });
+  const accessRef = useRef(dashboardAccess);
+  useEffect(() => { accessRef.current = dashboardAccess; }, [dashboardAccess]);
+  const lastVerifiedUserRef = useRef(null);
+  // Navigasi eksplisit ke beranda tidak boleh ditimpa redirect SIGNED_OUT.
+  const suppressSignOutRedirectRef = useRef(false);
+  // Cermin view terkini untuk listener auth (closure effect hanya jalan sekali).
+  const viewRef = useRef(currentView);
+  useEffect(() => { viewRef.current = currentView; }, [currentView]);
   const [selectedRole, setSelectedRole] = useState('petani');
 
   useEffect(() => {
@@ -82,22 +167,32 @@ function AppContent() {
     localStorage.setItem('agriconnect_theme', theme);
   }, [theme]);
 
-  // Sync with browser URL hash
+  // Sync with browser URL hash (supporting sub-routes)
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash;
-      if (hash === '#/login') {
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      if (isRecoveryUrl(hash, search)) {
         setCurrentView('login');
-      } else if (hash === '#/signup' || hash === '#/register') {
+      } else if (hash.startsWith('#/login')) {
+        setCurrentView('login');
+      } else if (hash.startsWith('#/signup') || hash.startsWith('#/register')) {
         setCurrentView('signup');
-      } else if (hash === '#/dashboard/petani' || hash === '#/petani') {
+      } else if (hash.startsWith('#/dashboard/petani') || hash.startsWith('#/petani')) {
         setCurrentView('farmer-dashboard');
-      } else if (hash === '#/dashboard/pembeli' || hash === '#/pembeli') {
+      } else if (hash.startsWith('#/dashboard/pembeli') || hash.startsWith('#/pembeli')) {
         setCurrentView('buyer-dashboard');
-      } else if (hash === '#/dashboard/admin' || hash === '#/admin') {
+      } else if (hash.startsWith('#/dashboard/admin') || hash.startsWith('#/admin')) {
         setCurrentView('admin-dashboard');
       } else if (hash === '' || hash === '#/' || hash === '#home') {
-        setCurrentView('home');
+        // supabase-js mengosongkan hash saat mengonsumsi token recovery
+        // (GoTrueClient._getSessionFromURL). Itu BUKAN navigasi user:
+        // tahan di login agar halaman ganti-password tidak hilang.
+        if (isRecoveryPending()) {
+          setCurrentView('login');
+        } else {
+          setCurrentView('home');
+        }
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -139,15 +234,252 @@ function AppContent() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Verifikasi akses dashboard: optimistis (render langsung dari cache) + validasi background.
+  // Tidak lagi me-reset layar ke "Memeriksa..." tiap refresh / token refresh.
+  useEffect(() => {
+    const requestedRole = ROLE_FOR_VIEW[currentView];
+    if (!requestedRole) {
+      setDashboardAccess({ view: null, status: 'idle' });
+      return undefined;
+    }
+
+    let cancelled = false;
+    const currentSnapshot = accessRef.current;
+
+    // Sudah terverifikasi untuk view ini + user yang sama -> lewati (cegah flicker).
+    if (
+      currentSnapshot?.view === currentView &&
+      currentSnapshot?.status === 'verified' &&
+      lastVerifiedUserRef.current &&
+      authVersion === lastVerifiedUserRef.current.authVersion
+    ) {
+      return undefined;
+    }
+
+    // Optimistis: jika cache cocok, tampilkan dashboard langsung sambil cek background.
+    const cached = readCachedUserForRole(requestedRole);
+    if (cached?.id && currentSnapshot?.view !== currentView) {
+      setDashboardAccess({ view: currentView, status: 'checking', optimistic: true });
+    } else if (!cached?.id && currentSnapshot?.view !== currentView) {
+      setDashboardAccess({ view: null, status: 'checking' });
+    }
+    // Jika view sama sudah tampil (optimistis/verified), jangan reset — validasi diam-diam.
+
+    const denyAccess = async (hard = true) => {
+      if (cancelled) return;
+      if (hard) {
+        await supabase.auth.signOut().catch(() => {});
+        clearAllAuthCache();
+        lastVerifiedUserRef.current = null;
+        setDashboardAccess({ view: null, status: 'denied' });
+        setCurrentView('login');
+        window.location.hash = '#/login';
+      } else {
+        // Gangguan sementara (network/timeout): pertahankan tampilan optimistis, jangan tendang user.
+        console.warn('[App] Verifikasi tertunda, pertahankan sesi lokal.');
+        setDashboardAccess(prev => (prev.view === currentView ? prev : { view: null, status: 'checking' }));
+      }
+    };
+
+    const withTimeout = (promise, ms) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('verify-timeout')), ms))
+      ]);
+
+    const verifyDashboardAccess = async () => {
+      // Jalur cepat: sesi lokal (tanpa roundtrip server seperti getUser).
+      let userId = null;
+      let userEmail = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session?.user) {
+          userId = session.user.id;
+          userEmail = session.user.email;
+        }
+      } catch (e) {}
+
+      // Fallback: konfirmasi ke server (sekali saja, dengan timeout).
+      if (!userId) {
+        try {
+          const { data: { user } } = await withTimeout(supabase.auth.getUser(), 8000);
+          if (cancelled) return;
+          if (user) {
+            userId = user.id;
+            userEmail = user.email;
+          }
+        } catch (e) {
+          if (cancelled) return;
+          // Timeout/network + masih ada cache optimistis -> jangan deny, biarkan tampil.
+          if (readCachedUserForRole(requestedRole)?.id) {
+            await denyAccess(false);
+            return;
+          }
+        }
+      }
+
+      if (!userId) {
+        // Tidak ada sesi sama sekali. Jika cache optimistis ada, beri kesempatan (mis. session belum restore),
+        // coba sekali lagi via getUser sebelum menendang.
+        if (readCachedUserForRole(requestedRole)?.id) {
+          try {
+            const { data: { user } } = await withTimeout(supabase.auth.getUser(), 8000);
+            if (cancelled) return;
+            if (user) {
+              userId = user.id;
+              userEmail = user.email;
+            }
+          } catch (e) {}
+        }
+        if (!userId) {
+          if (cancelled) return;
+          await denyAccess(true);
+          return;
+        }
+      }
+
+      let profile = null;
+      try {
+        const res = await withTimeout(
+          supabase.from('profiles').select('role, kyc_status').eq('id', userId).maybeSingle(),
+          8000
+        );
+        if (cancelled) return;
+        profile = res?.data;
+        if (res?.error) throw new Error(res.error.message);
+      } catch (e) {
+        if (cancelled) return;
+        // Gagal baca profil karena network/timeout -> jangan tendang jika optimistis.
+        if (e?.message === 'verify-timeout' && readCachedUserForRole(requestedRole)?.id) {
+          await denyAccess(false);
+          return;
+        }
+        await denyAccess(true);
+        return;
+      }
+
+      if (!profile || !['petani', 'pembeli', 'admin'].includes(profile.role)) {
+        await denyAccess(true);
+        return;
+      }
+
+      const profileApproved = profile.role === 'admin' || profile.kyc_status === 'verified';
+      if (!profileApproved) {
+        await denyAccess(true);
+        return;
+      }
+
+      if (profile.role !== requestedRole) {
+        const targetView = VIEW_FOR_ROLE[profile.role];
+        if (cancelled) return;
+        lastVerifiedUserRef.current = { userId, authVersion };
+        setDashboardAccess({ view: targetView, status: 'verified' });
+        setCurrentView(targetView);
+        window.location.hash = HASH_FOR_VIEW[targetView];
+        return;
+      }
+
+      if (cancelled) return;
+      lastVerifiedUserRef.current = { userId, authVersion };
+      // Segarkan cache peran agar refresh berikutnya instan.
+      try {
+        const payload = { id: userId, email: userEmail, role: profile.role };
+        localStorage.setItem('agriconnect_auth_user', JSON.stringify({ ...(readCachedUserForRole(null) || {}), ...payload }));
+        localStorage.setItem(`agriconnect_auth_user_${profile.role}`, JSON.stringify(payload));
+      } catch (e) {}
+      setDashboardAccess({ view: currentView, status: 'verified' });
+    };
+
+    verifyDashboardAccess().catch(() => denyAccess(false));
+    return () => { cancelled = true; };
+  }, [currentView, authVersion]);
+
+  // Sync Supabase Auth state with local storage.
+  // TOKEN_REFRESHED sengaja TIDAK memicu verifikasi ulang (itu penyebab flicker tiap refresh/fokus tab).
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        try {
+          const stored = localStorage.getItem('agriconnect_auth_user');
+          const parsed = stored ? JSON.parse(stored) : null;
+          if (!parsed || parsed.id !== session.user.id) {
+            const metaName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
+            const metaRole = session.user.user_metadata?.role;
+            localStorage.setItem('agriconnect_auth_user', JSON.stringify({
+              id: session.user.id,
+              email: session.user.email,
+              role: metaRole || parsed?.role,
+              fullName: metaName || parsed?.fullName,
+              name: metaName || parsed?.name
+            }));
+          }
+        } catch (e) {}
+      }
+    }).catch(err => {
+      console.warn('Session check warning:', err);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setCurrentView('login');
+      }
+      if (event === 'SIGNED_OUT') {
+        clearAllAuthCache();
+        lastVerifiedUserRef.current = null;
+        setDashboardAccess({ view: null, status: 'idle' });
+        // Jangan timpa navigasi eksplisit (mis. "Kembali ke Beranda" yang juga memanggil signOut).
+        if (suppressSignOutRedirectRef.current) {
+          suppressSignOutRedirectRef.current = false;
+          return;
+        }
+        // Hanya tendang ke login jika sedang di dashboard (sesi kedaluwarsa).
+        const v = viewRef.current;
+        if (v === 'farmer-dashboard' || v === 'buyer-dashboard' || v === 'admin-dashboard') {
+          setCurrentView('login');
+          window.location.hash = '#/login';
+        }
+      } else if (event === 'SIGNED_IN') {
+        // Hanya verifikasi ulang jika user-nya benar-benar berganti.
+        if (!lastVerifiedUserRef.current || lastVerifiedUserRef.current.userId !== session?.user?.id) {
+          setAuthVersion(version => version + 1);
+        }
+      } else if (event === 'USER_UPDATED') {
+        setAuthVersion(version => version + 1);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
+
   const handleBackToHome = () => {
+    // Keluar eksplisit dari alur recovery (flag ikut dibersihkan).
+    try {
+      sessionStorage.removeItem('agriconnect_recovery_pending');
+    } catch (e) {}
+    // Tandai agar event SIGNED_OUT dari signOut ini tidak mengembalikan ke #/login.
+    suppressSignOutRedirectRef.current = true;
+    supabase.auth.signOut().catch(() => {}).finally(() => {
+      // Pengaman: jika event tidak datang (tanpa sesi), flag dibersihkan otomatis.
+      setTimeout(() => { suppressSignOutRedirectRef.current = false; }, 3000);
+    });
+    clearAllAuthCache();
+    lastVerifiedUserRef.current = null;
+    setDashboardAccess({ view: null, status: 'idle' });
     setCurrentView('home');
     window.location.hash = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleOpenSimulation = (commodity = null) => {
-    setSelectedCommodity(commodity);
-    setSimulationOpen(true);
+  const handleScrollToCommodities = () => {
+    const el = document.getElementById('pasar-komoditas') || document.getElementById('komoditas');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      handleOpenSignup('pembeli');
+    }
   };
 
   // If user is on the Login or Signup view, render dedicated AuthPage matching reference
@@ -161,7 +493,36 @@ function AppContent() {
         onToggleTheme={handleToggleTheme}
         onNavigateToDashboard={() => handleOpenFarmerDashboard()}
         onNavigateToBuyerDashboard={() => handleOpenBuyerDashboard()}
+        onNavigateToAdminDashboard={() => handleOpenAdminDashboard()}
       />
+    );
+  }
+
+  const isDashboardView = ['farmer-dashboard', 'buyer-dashboard', 'admin-dashboard'].includes(currentView);
+  if (isDashboardView && dashboardAccess.view !== currentView) {
+    return (
+      <div role="status" aria-live="polite" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
+        <div style={{ textAlign: 'center', maxWidth: '360px' }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.5rem' }}>Memeriksa sesi dan hak akses...</div>
+          <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary, #64748b)', marginBottom: '1.25rem' }}>Menunggu konfirmasi Supabase. Jika lebih dari 10 detik, coba muat ulang verifikasi.</div>
+          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
+            <button
+              type="button"
+              onClick={() => setAuthVersion(v => v + 1)}
+              style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: '#5452f6', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Coba Lagi
+            </button>
+            <button
+              type="button"
+              onClick={handleBackToHome}
+              style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: 'transparent', color: 'var(--text-secondary, #64748b)', border: '1px solid var(--border-subtle, #e2e8f0)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              Beranda
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -214,7 +575,7 @@ function AppContent() {
       {/* Main Landing Sections */}
       <main style={{ flex: 1 }}>
         <HeroSection 
-          onOpenSimulation={() => handleOpenSimulation(null)}
+          onOpenSimulation={handleScrollToCommodities}
           onRoleSelect={(role) => {
             if (role === 'petani') {
               handleOpenFarmerDashboard();
@@ -229,15 +590,13 @@ function AppContent() {
         <MarketPriceTicker />
 
         <FeaturesSection 
-          onOpenSimulation={() => handleOpenSimulation(null)}
+          onOpenSimulation={handleScrollToCommodities}
         />
 
         <CommodityShowcase 
-          onSelectCommodity={handleOpenSimulation}
-        />
-
-        <BindingFlowSection 
-          onOpenSimulation={() => handleOpenSimulation(null)}
+          onSelectCommodity={() => handleOpenSignup('pembeli')}
+          onRequireLogin={handleOpenLogin}
+          onRegister={() => handleOpenSignup('pembeli')}
         />
 
         {/* Dedicated Portal Access Section at the bottom of the landing page */}
@@ -253,20 +612,6 @@ function AppContent() {
         onOpenFarmerDashboard={handleOpenFarmerDashboard}
         onOpenBuyerDashboard={handleOpenBuyerDashboard}
         onOpenAdminDashboard={handleOpenAdminDashboard}
-      />
-
-      {/* Interactive Binding Simulation Modal */}
-      <BindingSimulationModal 
-        isOpen={simulationOpen}
-        onClose={() => setSimulationOpen(false)}
-        commodity={selectedCommodity}
-      />
-
-      {/* Fallback In-page Modal if needed */}
-      <AuthModal 
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialRole={selectedRole}
       />
     </div>
   );

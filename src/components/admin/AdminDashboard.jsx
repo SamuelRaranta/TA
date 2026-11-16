@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   SquaresFour, 
@@ -25,18 +25,21 @@ import {
   Handshake
 } from '@phosphor-icons/react';
 
-import { INITIAL_ADMIN_PROFILE, PLATFORM_OVERVIEW_METRICS } from './adminMockData';
 
-import AdminCloneOverview from './AdminCloneOverview';
-import AdminVerificationView from './AdminVerificationView';
-import AdminEscrowView from './AdminEscrowView';
-import AdminBindingView from './AdminBindingView';
-import AdminCommodityModeration from './AdminCommodityModeration';
-import AdminDisputeView from './AdminDisputeView';
-import AdminSettingsView from './AdminSettingsView';
-import AdminProcurementView from './AdminProcurementView';
-import AdminMarketPriceView from './AdminMarketPriceView';
-import AdminChatView from './AdminChatView';
+import { supabase } from '../../lib/supabaseClient';
+
+import RingkasanAdmin from './RingkasanAdmin';
+import KelolaPengguna from './KelolaPengguna';
+import KelolaEscrow from './KelolaEscrow';
+import KelolaKomoditas from './KelolaKomoditas';
+import PengaturanAdmin from './PengaturanAdmin';
+import KelolaPengadaan from './KelolaPengadaan';
+import KelolaHargaPasar from './KelolaHargaPasar';
+import PesanAdmin from './PesanAdmin';
+import KelolaLaporanBug from './KelolaLaporanBug';
+import NotificationDropdown from '../common/NotificationDropdown';
+import NotificationPage from '../common/NotificationPage';
+import { useNotifications } from '../../lib/useNotifications';
 
 class AdminErrorBoundary extends React.Component {
   constructor(props) {
@@ -72,16 +75,62 @@ class AdminErrorBoundary extends React.Component {
   }
 }
 
+// Route mapping for Admin sub-pages
+const ADMIN_TAB_TO_ROUTE = {
+  dashboard: '#/admin/dashboard',
+  pengguna: '#/admin/kelola-pengguna',
+  komoditas: '#/admin/kelola-komoditas',
+  pengadaan: '#/admin/kelola-pengadaan',
+  hargapasar: '#/admin/kelola-harga-pasar',
+  pesan: '#/admin/pesan',
+  escrow: '#/admin/escrow',
+  laporanbug: '#/admin/laporan-bug',
+  pengaturan: '#/admin/pengaturan',
+  notifikasi: '#/admin/notifikasi'
+};
+
+const getAdminTabFromHash = () => {
+  const hash = window.location.hash.toLowerCase();
+  if (hash.includes('notifikasi') || hash.includes('notifications')) return 'notifikasi';
+  if (hash.includes('kelola-pengguna') || hash.includes('verifikasi') || hash.includes('kyc') || hash.includes('pengguna') || hash.includes('users')) return 'pengguna';
+  if (hash.includes('kelola-komoditas') || hash.includes('moderasi') || hash.includes('komoditas') || hash.includes('commodity')) return 'komoditas';
+  if (hash.includes('kelola-pengadaan') || hash.includes('procurement') || hash.includes('pengadaan')) return 'pengadaan';
+  if (hash.includes('harga-pasar') || hash.includes('hargapasar') || hash.includes('market')) return 'hargapasar';
+  if (hash.includes('pesan') || hash.includes('chat')) return 'pesan';
+  if (hash.includes('escrow')) return 'escrow';
+  if (hash.includes('laporan-bug') || hash.includes('bug') || hash.includes('laporan')) return 'laporanbug';
+  if (hash.includes('pengaturan') || hash.includes('settings')) return 'pengaturan';
+  return 'dashboard';
+};
+
 export default function AdminDashboard({ 
   onBackToHome, 
   theme, 
   onToggleTheme 
 }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => getAdminTabFromHash());
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
-  const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+
+  // Switch tab AND update browser URL hash for deep linking
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    const targetRoute = ADMIN_TAB_TO_ROUTE[newTab] || `#/admin/${newTab}`;
+    if (window.location.hash !== targetRoute) {
+      window.location.hash = targetRoute;
+    }
+  };
+
+  // Sync with browser back/forward buttons or direct URL change
+  useEffect(() => {
+    const onHashChange = () => {
+      const tab = getAdminTabFromHash();
+      setActiveTab(tab);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
 
   // Modal for Bug Report
   const [bugModalOpen, setBugModalOpen] = useState(false);
@@ -89,7 +138,150 @@ export default function AdminDashboard({
   const [bugDescription, setBugDescription] = useState('');
   const [bugTitle, setBugTitle] = useState('');
 
-  const adminProfile = INITIAL_ADMIN_PROFILE;
+  const [adminProfile, setAdminProfile] = useState(() => {
+    try {
+      const roleStored = localStorage.getItem('agriconnect_auth_user_admin');
+      const genericStored = localStorage.getItem('agriconnect_auth_user');
+      const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+      // ISOLASI: hanya terima jika role=admin. Tanpa itu id=null agar tidak menarik data petani/pembeli.
+      if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'admin')) {
+        return {
+          id: parsed.id,
+          name: parsed.fullName || parsed.name || 'Admin Utama AgriConnect',
+          email: parsed.email || 'admin@agriconnect.id',
+          phone: parsed.phone || '0812-0000-9999',
+          location: '',
+          address: '',
+          avatar: parsed.avatar || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160&auto=format&fit=crop&q=80',
+          role: 'admin',
+          kycStatus: 'verified',
+          createdAt: parsed.created_at || parsed.createdAt || null
+        };
+      }
+    } catch (e) {}
+    return {
+      id: null,
+      name: 'Admin Utama AgriConnect',
+      email: 'admin@agriconnect.id',
+      phone: '0812-0000-9999',
+      location: '',
+      address: '',
+      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160&auto=format&fit=crop&q=80',
+      role: 'admin',
+      kycStatus: 'verified',
+      createdAt: null
+    };
+  });
+
+  const [currentAdminId, setCurrentAdminId] = useState(() => {
+    try {
+      const roleStored = localStorage.getItem('agriconnect_auth_user_admin');
+      const genericStored = localStorage.getItem('agriconnect_auth_user');
+      const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+      if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'admin')) return parsed.id;
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Load real admin profile from Supabase profiles table — ISOLASI ketat role=admin
+  useEffect(() => {
+    let isMounted = true;
+    const loadAdminProfile = async () => {
+      try {
+        const roleStored = localStorage.getItem('agriconnect_auth_user_admin');
+        const genericStored = localStorage.getItem('agriconnect_auth_user');
+        let authUser = null;
+        try {
+          const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+          if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'admin')) authUser = parsed;
+        } catch (e) {}
+        const { data: { user } } = await supabase.auth.getUser();
+        let currentUserId = user?.id || authUser?.id || null;
+        // Validasi role admin dari DB agar petani/pembeli tidak terbaca sebagai admin
+        if (currentUserId) {
+          try {
+            const { data: uProf } = await supabase.from('profiles').select('id, role').eq('id', currentUserId).maybeSingle();
+            if (uProf && uProf.role && String(uProf.role).toLowerCase() !== 'admin') return;
+            if (user?.id && user.user_metadata?.role && String(user.user_metadata.role).toLowerCase() !== 'admin' && !uProf) return;
+          } catch (e) {}
+        } else {
+          return;
+        }
+        if (isMounted && currentUserId) setCurrentAdminId(currentUserId);
+
+        if (currentUserId) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUserId)
+            .maybeSingle();
+
+          if (isMounted && data) {
+            setAdminProfile(prev => ({
+              ...prev,
+              id: currentUserId,
+              name: data.full_name || prev.name,
+              email: data.email || user?.email || authUser?.email || prev.email,
+              phone: data.phone || prev.phone,
+              address: '',
+              location: '',
+              avatar: data.avatar_url || prev.avatar,
+              role: 'admin',
+              kycStatus: 'verified',
+              createdAt: data.created_at || user?.created_at || prev.createdAt || null,
+              adminDepartment: data.department || prev.adminDepartment
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[AdminDashboard] Gagal memuat profil admin dari Supabase:', err);
+      }
+    };
+
+    loadAdminProfile();
+
+    // Subscribe realtime HANYA untuk profil admin sendiri.
+    const channelName = `realtime_admin_profile_${currentAdminId || 'anon'}`;
+    const channelFilter = currentAdminId ? { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentAdminId}` } : { event: '*', schema: 'public', table: 'profiles', filter: 'id=eq.00000000-0000-0000-0000-000000000000' };
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', channelFilter, () => {
+        loadAdminProfile();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [currentAdminId]);
+
+  const {
+    notifications,
+    unreadCount,
+    isLoading: notifLoading,
+    markAsRead,
+    markAllAsRead,
+    refresh: refreshNotifications
+  } = useNotifications(currentAdminId, 'admin', { limit: 50 });
+
+  const handleNotificationClick = (notif) => {
+    if (notif.related_type === 'proposal') {
+      handleTabChange('pengadaan');
+    } else if (notif.related_type === 'commodity') {
+      handleTabChange('komoditas');
+    } else if (notif.related_type === 'bug_report') {
+      handleTabChange('laporanbug');
+    } else if (notif.related_type === 'user' || notif.related_type === 'profile') {
+      handleTabChange('pengguna');
+    } else if (notif.related_type === 'order' || notif.related_type === 'payment') {
+      handleTabChange('escrow');
+    } else {
+      handleTabChange('notifikasi');
+    }
+  };
 
   // Dynamic page title mapping based on active tab
   const getPageTitle = () => {
@@ -110,12 +302,12 @@ export default function AdminDashboard({
         return 'Pesan';
       case 'escrow':
         return 'Rekening Bersama Escrow';
-      case 'binding':
-        return 'Pengawasan Kontrak Binding';
-      case 'sengketa':
-        return 'Resolusi Sengketa Transaksi';
+      case 'laporanbug':
+        return 'Laporan Bug';
       case 'pengaturan':
         return 'Pengaturan Platform';
+      case 'notifikasi':
+        return 'Notifikasi';
       default:
         return 'Dashboard';
     }
@@ -131,6 +323,21 @@ export default function AdminDashboard({
       setBugTitle('');
       setBugDescription('');
     }, 2000);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out notice:', err);
+    }
+    localStorage.removeItem('agriconnect_auth_user');
+    if (onBackToHome) {
+      onBackToHome();
+    } else {
+      window.location.hash = '';
+      window.location.reload();
+    }
   };
 
   return (
@@ -183,7 +390,7 @@ export default function AdminDashboard({
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('dashboard'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('dashboard'); setMobileSidebarOpen(false); }}
                 title="Dashboard"
               >
                 {activeTab === 'dashboard' && <span className="clone-active-indicator" />}
@@ -195,46 +402,43 @@ export default function AdminDashboard({
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pengguna' || activeTab === 'kyc' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pengguna'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pengguna'); setMobileSidebarOpen(false); }}
                 title="Kelola Pengguna"
               >
                 {(activeTab === 'pengguna' || activeTab === 'kyc') && <span className="clone-active-indicator" />}
                 <Users size={18} weight={activeTab === 'pengguna' || activeTab === 'kyc' ? 'fill' : 'regular'} className="clone-nav-icon" />
                 <span className="clone-nav-label">Kelola Pengguna</span>
-                <span className="clone-nav-badge">{PLATFORM_OVERVIEW_METRICS.pendingVerifications}</span>
               </button>
 
               {/* 3. Kelola Komoditas */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'komoditas' || activeTab === 'moderasi' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('komoditas'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('komoditas'); setMobileSidebarOpen(false); }}
                 title="Kelola Komoditas"
               >
                 {(activeTab === 'komoditas' || activeTab === 'moderasi') && <span className="clone-active-indicator" />}
                 <Package size={18} weight={activeTab === 'komoditas' || activeTab === 'moderasi' ? 'fill' : 'regular'} className="clone-nav-icon" />
                 <span className="clone-nav-label">Kelola Komoditas</span>
-                <span className="clone-nav-badge">5</span>
               </button>
 
               {/* 4. Kelola Pengadaan (Pengajuan penawaran dari pembeli ke petani) */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pengadaan' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pengadaan'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pengadaan'); setMobileSidebarOpen(false); }}
                 title="Kelola Pengadaan (Pengajuan Penawaran Pembeli: Komoditas, Volume & Target Harga)"
               >
                 {activeTab === 'pengadaan' && <span className="clone-active-indicator" />}
                 <Handshake size={18} weight={activeTab === 'pengadaan' ? 'fill' : 'regular'} className="clone-nav-icon" />
                 <span className="clone-nav-label">Kelola Pengadaan</span>
-                <span className="clone-nav-badge">5</span>
               </button>
 
               {/* 5. Kelola Harga Pasar */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'hargapasar' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('hargapasar'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('hargapasar'); setMobileSidebarOpen(false); }}
                 title="Kelola Harga Pasar"
               >
                 {activeTab === 'hargapasar' && <span className="clone-active-indicator" />}
@@ -246,13 +450,12 @@ export default function AdminDashboard({
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pesan' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pesan'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pesan'); setMobileSidebarOpen(false); }}
                 title="Pesan"
               >
                 {activeTab === 'pesan' && <span className="clone-active-indicator" />}
                 <ChatCircleText size={18} weight={activeTab === 'pesan' ? 'fill' : 'regular'} className="clone-nav-icon" />
                 <span className="clone-nav-label">Pesan</span>
-                <span className="clone-nav-badge">3</span>
               </button>
 
             </div>
@@ -263,11 +466,37 @@ export default function AdminDashboard({
             <div className="clone-section-title">GENERAL</div>
             <div className="clone-nav-list">
               
-              {/* 1. Pengaturan */}
+              {/* 1. Notifikasi */}
+              <button
+                type="button"
+                className={`clone-nav-item ${activeTab === 'notifikasi' ? 'active' : ''}`}
+                onClick={() => { handleTabChange('notifikasi'); setMobileSidebarOpen(false); }}
+                title="Notifikasi Operasional"
+              >
+                {activeTab === 'notifikasi' && <span className="clone-active-indicator" />}
+                <Bell size={18} weight={activeTab === 'notifikasi' ? 'fill' : 'regular'} className="clone-nav-icon" />
+                <span className="clone-nav-label">Notifikasi</span>
+                {unreadCount > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    background: '#5452f6',
+                    color: '#fff',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    borderRadius: '999px',
+                    padding: '1px 6px',
+                    lineHeight: '1.2'
+                  }}>
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 2. Pengaturan */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pengaturan' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pengaturan'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pengaturan'); setMobileSidebarOpen(false); }}
                 title="Pengaturan"
               >
                 {activeTab === 'pengaturan' && <span className="clone-active-indicator" />}
@@ -275,22 +504,23 @@ export default function AdminDashboard({
                 <span className="clone-nav-label">Pengaturan</span>
               </button>
 
-              {/* 2. Laporkan Bug */}
+              {/* 2. Laporan Bug */}
               <button
                 type="button"
-                className="clone-nav-item"
-                onClick={() => { setBugModalOpen(true); setMobileSidebarOpen(false); }}
-                title="Laporkan Bug"
+                className={`clone-nav-item ${activeTab === 'laporanbug' ? 'active' : ''}`}
+                onClick={() => { handleTabChange('laporanbug'); setMobileSidebarOpen(false); }}
+                title="Kelola Laporan Bug Pengguna"
               >
-                <Bug size={18} weight="regular" className="clone-nav-icon" />
-                <span className="clone-nav-label">Laporkan Bug</span>
+                {activeTab === 'laporanbug' && <span className="clone-active-indicator" />}
+                <Bug size={18} weight={activeTab === 'laporanbug' ? 'fill' : 'regular'} className="clone-nav-icon" />
+                <span className="clone-nav-label">Laporan Bug</span>
               </button>
 
               {/* 4. Logout */}
               <button
                 type="button"
                 className="clone-nav-item clone-logout-item"
-                onClick={onBackToHome}
+                onClick={handleLogout}
                 title="Keluar ke Beranda"
               >
                 <SignOut size={18} weight="bold" className="clone-nav-icon" />
@@ -313,7 +543,7 @@ export default function AdminDashboard({
           <button 
             type="button" 
             className="clone-promo-btn sky-btn"
-            onClick={() => setActiveTab('escrow')}
+            onClick={() => handleTabChange('escrow')}
           >
             Escrow
           </button>
@@ -330,7 +560,7 @@ export default function AdminDashboard({
       )}
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <div className="clone-main-content">
+      <div className={`clone-main-content ${activeTab === 'pesan' ? 'pesan-page-active' : ''}`}>
         
         {/* Top Bar */}
         <header className="clone-topbar">
@@ -383,44 +613,16 @@ export default function AdminDashboard({
               )}
             </button>
 
-            {/* Notification Bell */}
-            <div style={{ position: 'relative' }}>
-              <button 
-                type="button" 
-                className="clone-icon-btn" 
-                title="Notifikasi Operasional"
-                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-              >
-                <Bell size={18} weight="regular" />
-                <span className="clone-notif-dot" />
-              </button>
-
-              {/* Notification Popover */}
-              {notifDropdownOpen && (
-                <>
-                  <div 
-                    style={{ position: 'fixed', inset: 0, zIndex: 49 }} 
-                    onClick={() => setNotifDropdownOpen(false)} 
-                  />
-                  <div className="clone-notif-popover">
-                    <div className="clone-popover-header">
-                      <span style={{ fontWeight: 700, fontSize: '0.84rem' }}>Notifikasi Operasional</span>
-                      <span style={{ fontSize: '0.72rem', color: '#5452f6', cursor: 'pointer' }}>2 Baru</span>
-                    </div>
-                    <div className="clone-popover-list">
-                      <div className="clone-popover-item">
-                        <div style={{ fontSize: '0.78rem', color: '#1e293b' }}>2 Dana Escrow siap dicairkan (Kontrak Langowan & Kombi).</div>
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>10 menit lalu</div>
-                      </div>
-                      <div className="clone-popover-item">
-                        <div style={{ fontSize: '0.78rem', color: '#1e293b' }}>PT Royal Coconut Minahasa mengajukan verifikasi KYC baru.</div>
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>1 jam lalu</div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+            {/* Notification Bell with Supabase Realtime Dropdown */}
+            <NotificationDropdown 
+              notifications={notifications}
+              unreadCount={unreadCount}
+              userRole="admin"
+              onMarkAsRead={markAsRead}
+              onMarkAllAsRead={markAllAsRead}
+              onNotificationClick={handleNotificationClick}
+              onViewAll={() => handleTabChange('notifikasi')}
+            />
 
             {/* User Profile Pill with Role Subtitle & Dropdown */}
             <div style={{ position: 'relative' }}>
@@ -508,7 +710,7 @@ export default function AdminDashboard({
                       className="clone-profile-dropdown-item clone-profile-dropdown-danger"
                       onClick={() => {
                         setProfileMenuOpen(false);
-                        onBackToHome();
+                        handleLogout();
                       }}
                     >
                       <SignOut size={16} weight="bold" className="clone-dropdown-item-icon" />
@@ -524,60 +726,74 @@ export default function AdminDashboard({
         </header>
 
         {/* Dynamic Body Content */}
-        <div className="clone-page-body">
+        <div className={`clone-page-body ${activeTab === 'pesan' ? 'pesan-active-body' : ''}`}>
           <AdminErrorBoundary key={activeTab}>
             {/* TAB 1: DASHBOARD OVERVIEW */}
             {activeTab === 'dashboard' && (
-              <AdminCloneOverview 
+              <RingkasanAdmin 
                 onNavigate={(tab) => setActiveTab(tab)}
               />
             )}
 
             {/* TAB 2: KELOLA PENGGUNA */}
             {(activeTab === 'pengguna' || activeTab === 'kyc') && (
-              <AdminVerificationView 
+              <KelolaPengguna 
                 onNavigate={(tab) => setActiveTab(tab)}
               />
             )}
 
             {/* TAB 3: KELOLA KOMODITAS */}
             {(activeTab === 'komoditas' || activeTab === 'moderasi') && (
-              <AdminCommodityModeration />
+              <KelolaKomoditas />
             )}
 
             {/* TAB 4: KELOLA PENGADAAN (Permintaan Beli Pembeli ke Petani) */}
             {activeTab === 'pengadaan' && (
-              <AdminProcurementView />
+              <KelolaPengadaan />
             )}
 
             {/* TAB 5: KELOLA HARGA PASAR */}
             {activeTab === 'hargapasar' && (
-              <AdminMarketPriceView />
+              <KelolaHargaPasar />
             )}
 
             {/* TAB 6: PESAN */}
             {activeTab === 'pesan' && (
-              <AdminChatView />
+              <PesanAdmin
+                currentUserId={adminProfile?.id || currentAdminId || null}
+                currentUserProfile={adminProfile}
+              />
             )}
 
             {/* TAB 7: ESCROW & KEUANGAN */}
             {activeTab === 'escrow' && (
-              <AdminEscrowView />
+              <KelolaEscrow />
             )}
 
-            {/* TAB 8: KONTRAK & BINDING */}
-            {activeTab === 'binding' && (
-              <AdminBindingView />
-            )}
-
-            {/* TAB 9: RESOLUSI SENGKETA */}
-            {activeTab === 'sengketa' && (
-              <AdminDisputeView />
-            )}
-
-            {/* TAB 10: PENGATURAN PLATFORM */}
+            {/* TAB 8: PENGATURAN PLATFORM */}
             {activeTab === 'pengaturan' && (
-              <AdminSettingsView />
+              <PengaturanAdmin 
+                profile={adminProfile}
+                onUpdateProfile={(updated) => setAdminProfile(updated)}
+                onLogout={handleLogout}
+              />
+            )}
+
+            {/* TAB 11: KELOLA LAPORAN BUG DARI PENGGUNA */}
+            {activeTab === 'laporanbug' && (
+              <KelolaLaporanBug />
+            )}
+
+            {/* TAB 12: NOTIFIKASI OPERASIONAL & SISTEM */}
+            {activeTab === 'notifikasi' && (
+              <NotificationPage 
+                notifications={notifications}
+                unreadCount={unreadCount}
+                userRole="admin"
+                onMarkAsRead={markAsRead}
+                onMarkAllAsRead={markAllAsRead}
+                onNotificationClick={handleNotificationClick}
+              />
             )}
           </AdminErrorBoundary>
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   SquaresFour, 
@@ -30,39 +30,117 @@ import {
   Plant,
   Truck,
   User,
-  CreditCard
+  CreditCard,
+  ClockCounterClockwise
 } from '@phosphor-icons/react';
 
+import { fetchMarketPricesFromSupabase, subscribeMarketPrices } from '../../lib/marketPriceService';
+import { fetchCommoditiesFromSupabase, subscribeCommodities } from '../../lib/commodityService';
 import { 
-  INITIAL_BUYER_PROFILE, 
-  INITIAL_CATALOG_COMMODITIES, 
-  INITIAL_BUYER_OFFERS, 
-  INITIAL_BUYER_BINDINGS, 
-  INITIAL_BUYER_TRANSACTIONS,
-  INITIAL_BUYER_WATCHLIST,
-  INITIAL_BUYER_PAYMENTS
-} from './buyerMockData';
-import { INITIAL_MARKET_PRICES } from '../farmer/mockData';
+  fetchProcurementProposalsFromSupabase, 
+  subscribeProcurementProposals, 
+  mapProposalToOfferItem 
+} from '../../lib/procurementService';
+import {
+  fetchOffersFromSupabase,
+  fetchContractsFromSupabase,
+  fetchTransactionsFromSupabase,
+  createOfferInSupabase,
+  createContractInSupabase,
+  createTransactionInSupabase,
+  ensureStockReserved,
+  ensureStockRestored,
+  updateOfferInSupabase,
+  subscribeOffers,
+  subscribeContracts,
+  subscribeTransactions
+} from '../../lib/dealService';
+import { 
+  notifyOfferCounteredByBuyer, 
+  notifyOfferAcceptedToFarmer 
+} from '../../lib/notificationService';
+import { supabase } from '../../lib/supabaseClient';
 
-import BuyerCloneOverview from './BuyerCloneOverview';
-import BuyerCatalog from './BuyerCatalog';
-import BuyerOffers from './BuyerOffers';
-import BuyerBinding from './BuyerBinding';
-import BuyerTransactions from './BuyerTransactions';
-import BuyerMarketPrice from './BuyerMarketPrice';
-import BuyerPayment from './BuyerPayment';
-import BuyerChatView from './BuyerChatView';
-import BuyerProfile from './BuyerProfile';
+import RingkasanPembeli from './RingkasanPembeli';
+import CariKomoditas from './CariKomoditas';
+import LihatPenawaran from './LihatPenawaran';
+import RiwayatPengadaanPembeli from './RiwayatPengadaanPembeli';
+import HargaPasarPembeli from './HargaPasarPembeli';
+import PembayaranPembeli from './PembayaranPembeli';
+import RiwayatTransaksiPembeli from './RiwayatTransaksiPembeli';
+import PesanPembeli from './PesanPembeli';
+import PengaturanPembeli from './PengaturanPembeli';
+import AjukanPenawaran from './AjukanPenawaran';
+import LaporkanMasalah from '../common/LaporkanMasalah';
+import NotificationDropdown from '../common/NotificationDropdown';
+import NotificationPage from '../common/NotificationPage';
+import { useNotifications } from '../../lib/useNotifications';
+
+// Route mapping for Buyer sub-pages
+const BUYER_TAB_TO_ROUTE = {
+  dashboard: '#/pembeli/dashboard',
+  katalog: '#/pembeli/cari-komoditas',
+  penawaran: '#/pembeli/lihat-penawaran',
+  'ajukan-penawaran': '#/pembeli/ajukan-penawaran',
+  watchlist: '#/pembeli/watchlist',
+  rfq: '#/pembeli/rfq',
+  transaksi: '#/pembeli/daftar-penawaran',
+  binding: '#/pembeli/pembayaran',
+  'harga-pasar': '#/pembeli/harga-pasar',
+  pembayaran: '#/pembeli/pembayaran',
+  'riwayat-transaksi': '#/pembeli/riwayat-transaksi',
+  pesan: '#/pembeli/pesan',
+  'laporkan-masalah': '#/pembeli/laporkan-masalah',
+  pengaturan: '#/pembeli/pengaturan',
+  notifikasi: '#/pembeli/notifikasi'
+};
+
+const getBuyerTabFromHash = () => {
+  const hash = window.location.hash.toLowerCase();
+  if (hash.includes('notifikasi') || hash.includes('notifications')) return 'notifikasi';
+  if (hash.includes('cari-komoditas') || hash.includes('katalog')) return 'katalog';
+  if (hash.includes('lihat-penawaran')) return 'penawaran';
+  if (hash.includes('ajukan-penawaran') || hash.includes('tambah-penawaran')) return 'ajukan-penawaran';
+  if (hash.includes('watchlist')) return 'watchlist';
+  if (hash.includes('rfq')) return 'rfq';
+  if (hash.includes('binding') || hash.includes('kontrak')) return 'pembayaran';
+  if (hash.includes('riwayat-transaksi')) return 'riwayat-transaksi';
+  if (hash.includes('daftar-penawaran') || hash.includes('transaksi') || hash.includes('pengadaan')) return 'transaksi';
+  if (hash.includes('harga-pasar') || hash.includes('hargapasar')) return 'harga-pasar';
+  if (hash.includes('pembayaran')) return 'pembayaran';
+  if (hash.includes('pesan') || hash.includes('chat')) return 'pesan';
+  if (hash.includes('laporkan-masalah') || hash.includes('laporan-bug') || hash.includes('laporan') || hash.includes('masalah')) return 'laporkan-masalah';
+  if (hash.includes('pengaturan') || hash.includes('settings')) return 'pengaturan';
+  return 'dashboard';
+};
 
 export default function BuyerDashboard({ 
   onBackToHome, 
   theme, 
   onToggleTheme 
 }) {
-  // Navigation active tab
-  // 'dashboard' | 'katalog' | 'watchlist' | 'rfq' | 'penawaran' | 'binding' | 'transaksi' | 'harga-pasar' | 'pesan' | 'pengaturan' | 'bantuan'
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Navigation active tab with deep-linking support
+  const [activeTab, setActiveTab] = useState(() => getBuyerTabFromHash());
   
+  // Switch tab AND update browser URL hash for deep linking
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab);
+    const targetRoute = BUYER_TAB_TO_ROUTE[newTab] || `#/pembeli/${newTab}`;
+    if (window.location.hash !== targetRoute) {
+      window.location.hash = targetRoute;
+    }
+  };
+
+  // Sync with browser back/forward buttons or direct URL change
+  useEffect(() => {
+    const onHashChange = () => {
+      const tab = getBuyerTabFromHash();
+      setActiveTab(tab);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
   // Accordion state for 'Eksplorasi Komoditas' dropdown in sidebar
   const [komoditasDropdownOpen, setKomoditasDropdownOpen] = useState(true);
 
@@ -82,37 +160,485 @@ export default function BuyerDashboard({
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
 
-  // Core Data States
-  const [buyerProfile, setBuyerProfile] = useState(INITIAL_BUYER_PROFILE);
-  const [commodities, setCommodities] = useState(INITIAL_CATALOG_COMMODITIES);
-  const [offers, setOffers] = useState(INITIAL_BUYER_OFFERS);
-  const [bindingAgreements, setBindingAgreements] = useState(INITIAL_BUYER_BINDINGS);
-  const [transactions, setTransactions] = useState(INITIAL_BUYER_TRANSACTIONS);
-  const [payments, setPayments] = useState(INITIAL_BUYER_PAYMENTS);
-  const [watchlist, setWatchlist] = useState(INITIAL_BUYER_WATCHLIST);
-  const [marketPrices, setMarketPrices] = useState(INITIAL_MARKET_PRICES);
+  // Loading States to prevent Stale Data Flash
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // Add Offer modal trigger state (when user clicks 'Ajukan Penawaran')
-  const [addOfferModalRequested, setAddOfferModalRequested] = useState(false);
+  // Core Data States (Real Supabase Data Only - No Mock Fallbacks)
+  const [buyerProfile, setBuyerProfile] = useState(() => {
+    try {
+      const roleStored = localStorage.getItem('agriconnect_auth_user_pembeli');
+      const genericStored = localStorage.getItem('agriconnect_auth_user');
+      const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+      if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'pembeli')) {
+        return {
+          id: parsed.id,
+          name: parsed.fullName || parsed.name || '',
+          email: parsed.email || '',
+          role: 'pembeli',
+          phone: parsed.phone || '',
+          location: parsed.location || 'Minahasa, Sulawesi Utara',
+          address: parsed.location || 'Minahasa, Sulawesi Utara',
+          avatar: parsed.avatar || '',
+          kycStatus: parsed.kyc_status || parsed.kycStatus || 'verified',
+          createdAt: parsed.created_at || parsed.createdAt || null
+        };
+      }
+    } catch (e) {}
+    return {
+      id: null,
+      name: '',
+      email: '',
+      role: 'pembeli',
+      phone: '',
+      location: 'Minahasa, Sulawesi Utara',
+      address: 'Minahasa, Sulawesi Utara',
+      avatar: '',
+      kycStatus: 'verified',
+      createdAt: null
+    };
+  });
+  const [currentBuyerId, setCurrentBuyerId] = useState(() => {
+    try {
+      const roleStored = localStorage.getItem('agriconnect_auth_user_pembeli');
+      const genericStored = localStorage.getItem('agriconnect_auth_user');
+      const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+      if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'pembeli')) return parsed.id;
+    } catch (err) {}
+    return null;
+  });
+  const [commodities, setCommodities] = useState([]);
+  const [offers, setOffers] = useState([]);
+  const [bindingAgreements, setBindingAgreements] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [watchlist, setWatchlist] = useState([]);
+  const [marketPrices, setMarketPrices] = useState([]);
+  const [proposals, setProposals] = useState([]);
 
-  // Notifications mock
-  const [notifications, setNotifications] = useState([
-    { id: 1, text: 'Poktan Ranowangko Langowan menyetujui penawaran 10 Ton Cengkeh Zanzibar!', time: '15 menit lalu', unread: true },
-    { id: 2, text: 'Poktan Danau Tondano mengajukan counter-offer Beras Superwin', time: '1 jam lalu', unread: true },
-    { id: 3, text: 'Verifikasi Booking Fee 5% kontrak AC-AGR/2026/IX/0051 telah berhasil', time: 'Kemarin', unread: false }
-  ]);
+  // Ganti user -> kosongkan daftar milik user lama DULU agar tidak tampil data basi.
+  const lastBuyerRef = useRef(currentBuyerId);
+  useEffect(() => {
+    if (lastBuyerRef.current !== currentBuyerId) {
+      lastBuyerRef.current = currentBuyerId;
+      setProposals([]);
+      setOffers([]);
+      setBindingAgreements([]);
+      setTransactions([]);
+      setPayments([]);
+    }
+  }, [currentBuyerId]);
 
-  // Handle Offer Submission from Catalog
-  const handleAddNewOffer = (newOffer) => {
-    setOffers(prev => [newOffer, ...prev]);
-    setNotifications(prev => [
-      { id: Date.now(), text: `Penawaran baru terkirim ke ${newOffer.farmerGroup}`, time: 'Baru saja', unread: true },
-      ...prev
-    ]);
+  // Load real market prices from Supabase and subscribe to realtime changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadPrices = async () => {
+      try {
+        const { data } = await fetchMarketPricesFromSupabase();
+        if (isMounted && data && data.length > 0) {
+          setMarketPrices(data);
+        }
+      } catch (err) {
+        console.warn('[BuyerDashboard] Gagal memuat harga pasar dari Supabase:', err);
+      }
+    };
+
+    loadPrices();
+
+    const unsubscribe = subscribeMarketPrices(() => {
+      loadPrices();
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Load commodities from Supabase and subscribe to realtime changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadCommodities = async () => {
+      try {
+        const { data } = await fetchCommoditiesFromSupabase();
+        if (isMounted && data && data.length > 0) {
+          setCommodities(data);
+        }
+      } catch (err) {
+        console.warn('[BuyerDashboard] Gagal memuat komoditas dari Supabase:', err);
+      }
+    };
+
+    loadCommodities();
+
+    const unsubscribe = subscribeCommodities(() => {
+      loadCommodities();
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
+  // Load authoritative buyer data (proposals, offers, binding agreements, transactions, payments)
+  const loadBuyerData = async (targetBuyerId) => {
+    if (!targetBuyerId) {
+      setProposals([]);
+      setOffers([]);
+      setBindingAgreements([]);
+      setTransactions([]);
+      setPayments([]);
+      return;
+    }
+    try {
+      const [proposalsRes, offersRes, contractsRes, trxsRes] = await Promise.all([
+        fetchProcurementProposalsFromSupabase({ buyerId: targetBuyerId }),
+        fetchOffersFromSupabase({ buyerId: targetBuyerId }),
+        fetchContractsFromSupabase({ buyerId: targetBuyerId }),
+        fetchTransactionsFromSupabase({ buyerId: targetBuyerId })
+      ]);
+
+      const freshProposals = proposalsRes?.data || [];
+      setProposals(freshProposals);
+
+      const dbOffers = offersRes?.data || [];
+      const mappedProposalOffers = freshProposals
+        .map(mapProposalToOfferItem)
+        .filter(p => p.status === 'Aktif' || p.status === 'Disetujui');
+
+      // Combine only fresh database offers + fresh proposal offers, avoiding duplicates
+      const dbOfferIds = new Set(dbOffers.map(o => o.id));
+      const nonDuplicateProposalOffers = mappedProposalOffers.filter(p => !dbOfferIds.has(p.id));
+      setOffers([...dbOffers, ...nonDuplicateProposalOffers]);
+
+      setBindingAgreements(contractsRes?.data || []);
+
+      const freshTrxs = trxsRes?.data || [];
+      setTransactions(freshTrxs);
+
+      // Map transactions to payments format for PembayaranPembeli
+      const freshContractsList = contractsRes?.data || [];
+      const mappedPayments = freshTrxs.map((trx, idx) => {
+        // Metode dari notes JSON bila ada, atau dari trx / kontrak terkait
+        let methodFromNotes = null;
+        let isMidtransPaid = false;
+        let midtransPaidAt = null;
+        let midtransRef = null;
+
+        try {
+          const rawNotes = trx.notes;
+          const parsedNotes = typeof rawNotes === 'string' && rawNotes.trim().startsWith('{')
+            ? JSON.parse(rawNotes)
+            : (rawNotes && typeof rawNotes === 'object' ? rawNotes : null);
+          if (parsedNotes?.paymentMethod) methodFromNotes = parsedNotes.paymentMethod;
+          if (parsedNotes?.paymentStatus === 'paid') {
+            isMidtransPaid = true;
+            midtransPaidAt = parsedNotes.paidAt || null;
+            midtransRef = parsedNotes.midtransOrderId || null;
+          }
+        } catch (e) {}
+
+        const matchingContract = trx.contract || (trx.contractId ? freshContractsList.find(c => c.id === trx.contractId) : null);
+        const resolvedMethod = methodFromNotes 
+          || trx.paymentMethod 
+          || trx.method 
+          || matchingContract?.payment_method 
+          || matchingContract?.paymentMethod 
+          || 'Pembayaran Langsung';
+
+        return {
+          id: trx.id,
+          contractId: trx.contractId || null,
+          invoiceNumber: `INV-${String(trx.id).replace(/dummy[-_ ]?/gi, '').replace(/[^A-Z0-9]/gi, '').slice(0, 12)}`,
+          commodity: trx.productName || trx.commodityName,
+          category: trx.category || 'Perkebunan',
+          farmerGroup: trx.farmerName || trx.farmerGroup || 'Kelompok Tani',
+          farmerName: trx.farmerName || trx.farmerGroup || 'Kelompok Tani',
+          farmerAvatar: trx.farmerAvatar || null,
+          volume: `${trx.volumeTon || 1} Ton`,
+          amount: trx.amount || 0,
+          status: trx.status === 'Selesai' 
+            ? 'Selesai' 
+            : (trx.status === 'Dibatalkan' ? 'Dibatalkan' : 'Berjalan'),
+          goodsStatus: trx.goodsStatus || (trx.status === 'Selesai' ? 'diterima' : 'belum_diterima'),
+          receivedAt: trx.receivedAt || null,
+          date: trx.date,
+          createdAt: trx.createdAt || null,
+          buyerId: trx.buyerId || null,
+          farmerId: trx.farmerId || null,
+          accountNumber: `8809-08${idx}1-2294-001`,
+          bankName: 'Bank Mandiri (Platform Escrow AgriConnect)',
+          method: resolvedMethod,
+          paidDate: isMidtransPaid
+            ? (midtransPaidAt ? new Date(midtransPaidAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terverifikasi')
+            : (trx.status === 'Selesai' || trx.goodsStatus === 'diterima' ? 'Lunas' : null),
+          referenceNumber: midtransRef || (['Pembayaran Berhasil', 'Selesai', 'Lunas'].includes(trx.status) ? `REF/ESC-${idx}` : null),
+          paymentStatus: isMidtransPaid ? 'paid' : 'pending',
+          paymentType: trx.paymentType || (['Berjalan', 'DP Terkunci'].includes(trx.status) ? 'DP Booking Fee (5%)' : 'Pelunasan Timbang Muat')
+        };
+      });
+      setPayments(mappedPayments);
+    } catch (err) {
+      console.warn('[BuyerDashboard] Gagal memuat data pembeli dari Supabase:', err);
+    }
   };
 
-  // Handle Counter Offer Acceptance
-  const handleAcceptCounterOffer = (offerId) => {
+  // Load proposals & deals from Supabase & keep synced
+  useEffect(() => {
+    let isMounted = true;
+    const resolveAndLoad = async () => {
+      setIsLoadingData(true);
+      try {
+        const roleStored = localStorage.getItem('agriconnect_auth_user_pembeli');
+        const genericStored = localStorage.getItem('agriconnect_auth_user');
+        let authUser = null;
+        try {
+          const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+          if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'pembeli')) authUser = parsed;
+        } catch (e) {}
+        const { data: { user } } = await supabase.auth.getUser();
+        const activeUserId = user?.id || authUser?.id || null;
+
+        if (isMounted) {
+          if (activeUserId) setCurrentBuyerId(activeUserId);
+          if (!activeUserId) {
+            setIsLoadingData(false);
+            return;
+          }
+          await loadBuyerData(activeUserId);
+        }
+      } catch (err) {
+        console.warn('[BuyerDashboard] Error resolving buyer user:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingData(false);
+        }
+      }
+    };
+
+    resolveAndLoad();
+
+    const unsubProposals = subscribeProcurementProposals(() => {
+      if (currentBuyerId) loadBuyerData(currentBuyerId);
+    });
+    const unsubOffers = subscribeOffers(() => {
+      if (currentBuyerId) loadBuyerData(currentBuyerId);
+    });
+    const unsubContracts = subscribeContracts(() => {
+      if (currentBuyerId) loadBuyerData(currentBuyerId);
+    });
+    const unsubTrxs = subscribeTransactions(() => {
+      if (currentBuyerId) loadBuyerData(currentBuyerId);
+    });
+    const unsubPaymentChannel = supabase
+      .channel(`realtime_buyer_payment_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payment' }, () => {
+        if (currentBuyerId) loadBuyerData(currentBuyerId);
+      })
+      .subscribe();
+    const unsubProfilesChannel = supabase
+      .channel(`realtime_buyer_profiles_${Date.now()}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        if (currentBuyerId) loadBuyerData(currentBuyerId);
+      })
+      .subscribe();
+
+    const handleCustomRefresh = () => {
+      if (currentBuyerId) loadBuyerData(currentBuyerId);
+    };
+    window.addEventListener('agriconnect:refresh-transactions', handleCustomRefresh);
+
+    return () => {
+      isMounted = false;
+      if (unsubProposals) unsubProposals();
+      if (unsubOffers) unsubOffers();
+      if (unsubContracts) unsubContracts();
+      if (unsubTrxs) unsubTrxs();
+      try {
+        supabase.removeChannel(unsubProfilesChannel);
+        supabase.removeChannel(unsubPaymentChannel);
+      } catch (e) {}
+      window.removeEventListener('agriconnect:refresh-transactions', handleCustomRefresh);
+    };
+  }, [currentBuyerId]);
+
+  // Load real buyer profile from Supabase profiles table
+  useEffect(() => {
+    let isMounted = true;
+    const loadBuyerProfile = async () => {
+      setIsLoadingProfile(true);
+      try {
+        const roleStored = localStorage.getItem('agriconnect_auth_user_pembeli');
+        const genericStored = localStorage.getItem('agriconnect_auth_user');
+        let authUser = null;
+        try {
+          const parsed = roleStored ? JSON.parse(roleStored) : (genericStored ? JSON.parse(genericStored) : null);
+          if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'pembeli')) authUser = parsed;
+        } catch (e) {}
+        const { data: { user } } = await supabase.auth.getUser();
+        let currentUserId = user?.id || authUser?.id || currentBuyerId || null;
+        // Validasi role dari DB: hanya lanjut jika role=pembeli (cegah petani/admin terbaca sebagai pembeli)
+        if (user?.id && !authUser) {
+          try {
+            const { data: uProf } = await supabase.from('profiles').select('id, role').eq('id', user.id).maybeSingle();
+            if (uProf && uProf.role && String(uProf.role).toLowerCase() !== 'pembeli') {
+              setIsLoadingProfile(false);
+              return;
+            }
+          } catch (e) {}
+        }
+        if (!currentUserId) {
+          setIsLoadingProfile(false);
+          return;
+        }
+
+        if (currentUserId) {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', currentUserId)
+            .maybeSingle();
+
+          if (isMounted && data) {
+            setBuyerProfile(prev => ({
+              ...prev,
+              id: currentUserId,
+              name: data.full_name || prev.name,
+              email: data.email || user?.email || authUser?.email || prev.email,
+              phone: data.phone || prev.phone,
+              location: data.location || prev.location,
+              warehouseAddress: data.location || prev.warehouseAddress,
+              avatar: data.avatar_url || prev.avatar,
+              role: data.role || 'pembeli',
+              kycStatus: data.kyc_status || prev.kycStatus || 'verified',
+              createdAt: data.created_at || user?.created_at || prev.createdAt || null
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn('[BuyerDashboard] Gagal memuat profil pembeli dari Supabase:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    loadBuyerProfile();
+
+    // Subscribe realtime HANYA untuk profil sendiri agar edit user lain tidak bocor.
+    const channelName = `realtime_buyer_profile_${currentBuyerId || 'anon'}`;
+    const channelFilter = currentBuyerId ? { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentBuyerId}` } : { event: '*', schema: 'public', table: 'profiles', filter: 'id=eq.00000000-0000-0000-0000-000000000000' };
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', channelFilter, () => {
+        loadBuyerProfile();
+      })
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [currentBuyerId]);
+
+  // Helper agar subtitle role di header HANYA Petani, Pembeli, atau Admin
+  const getDisplayRole = (role) => {
+    if (!role) return 'Pembeli';
+    const r = String(role).toLowerCase().trim();
+    if (r === 'admin') return 'Admin';
+    if (r === 'petani') return 'Petani';
+    return 'Pembeli';
+  };
+
+  // Helper logout tersinkronisasi
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out notice:', err);
+    }
+    localStorage.removeItem('agriconnect_auth_user');
+    localStorage.removeItem('agriconnect_auth_user_pembeli');
+    if (onBackToHome) {
+      onBackToHome();
+    } else {
+      window.location.hash = '';
+    }
+  };
+
+  // Add Offer state (when user clicks 'Ajukan Penawaran' or 'Tawar & Beli')
+  const [selectedOfferCommodity, setSelectedOfferCommodity] = useState(null);
+  const [addOfferModalRequested, setAddOfferModalRequested] = useState(false);
+
+  // Real Supabase Notifications
+  const {
+    notifications: realNotifications,
+    unreadCount: notifUnreadCount,
+    isLoading: notifLoading,
+    error: notifError,
+    refresh: refreshNotifications,
+    markAsRead: markNotificationAsRead,
+    markAllAsRead: markAllNotificationsAsRead
+  } = useNotifications(currentBuyerId, 'pembeli', { limit: 50 });
+
+  // Safe navigation when a notification item is clicked
+  const handleNotificationClick = (item) => {
+    if (item.related_type === 'order' || item.related_type === 'payment') {
+      handleTabChange('pembayaran');
+    } else if (item.related_type === 'offer') {
+      handleTabChange('penawaran');
+    } else if (item.related_type === 'proposal') {
+      handleTabChange('transaksi');
+    } else if (item.related_type === 'commodity') {
+      handleTabChange('katalog');
+    } else if (item.related_type === 'bug_report') {
+      handleTabChange('laporkan-masalah');
+    } else {
+      handleTabChange('dashboard');
+    }
+  };
+
+  // Handle Offer Submission from Catalog (Connected to Supabase)
+  // Return true bila tersimpan (stok ikut terreservasi), false bila gagal.
+  const handleAddNewOffer = async (newOffer) => {
+    setOffers(prev => [newOffer, ...prev]);
+    try {
+      // farmerId wajib agar penawaran muncul di halaman Penawaran petani.
+      let farmerId = newOffer.farmerId || null;
+      if (!farmerId && newOffer.commodityId) {
+        const match = (commodities || []).find(c => c.id === newOffer.commodityId);
+        if (match) farmerId = match.farmerId || null;
+      }
+      const { data, error } = await createOfferInSupabase({
+        buyerId: currentBuyerId,
+        commodityId: newOffer.commodityId,
+        commodityName: newOffer.commodityName,
+        farmerId,
+        farmerGroup: newOffer.farmerGroup,
+        farmerLeader: newOffer.farmerLeader,
+        requestedTon: newOffer.requestedTon,
+        offeredPricePerKg: newOffer.offeredPricePerKg,
+        listingPricePerKg: newOffer.listingPricePerKg,
+        paymentMethod: newOffer.paymentMethod,
+        validUntil: newOffer.validUntil,
+        notes: newOffer.notes,
+        status: 'Menunggu Respon'
+      });
+      if (!data) throw error || new Error('Gagal mengajukan penawaran.');
+      setOffers(prev => prev.map(o => o.id === newOffer.id ? { ...newOffer, ...data } : o));
+      return true;
+    } catch (err) {
+      console.warn('Gagal mengajukan penawaran ke Supabase:', err);
+      setOffers(prev => prev.filter(o => o.id !== newOffer.id));
+      window.alert(`Gagal mengajukan penawaran: ${err?.message || err}`);
+      return false;
+    }
+  };
+
+  // Handle Counter Offer Acceptance — deal ditutup: kunci stok + kontrak + transaksi.
+  const handleAcceptCounterOffer = async (offerId) => {
     const targetOffer = offers.find(o => o.id === offerId);
     if (!targetOffer) return;
 
@@ -120,64 +646,164 @@ export default function BuyerDashboard({
     const acceptedTon = targetOffer.counterTon || targetOffer.requestedTon;
     const totalVal = (acceptedTon * 1000) * acceptedPrice;
 
-    setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui', offeredPricePerKg: acceptedPrice, requestedTon: acceptedTon } : o));
+    // Resolve komoditas untuk kontrak (stok dikunci via ensure di bawah).
+    const normName = (s) => String(s || '').toLowerCase().trim();
+    const isUuidLikeLocal = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
+    let commodityId = isUuidLikeLocal(targetOffer.commodityId) ? targetOffer.commodityId : null;
+    if (!commodityId && targetOffer.commodityName) {
+      const match = (commodities || []).find(c => normName(c.name) === normName(targetOffer.commodityName));
+      if (match) commodityId = match.id;
+    }
 
-    const newBinding = {
-      id: `BND-BYR-2026-0${bindingAgreements.length + 60}`,
-      contractCode: `AC-AGR/2026/IX/00${bindingAgreements.length + 60}`,
-      offerId: targetOffer.id,
-      productName: targetOffer.commodityName,
-      farmerName: targetOffer.farmerGroup,
-      buyerName: buyerProfile.companyName,
-      tonnage: acceptedTon,
-      pricePerKg: acceptedPrice,
-      totalValue: totalVal,
-      bookingFee: totalVal * 0.05,
-      bookingFeeStatus: 'Terkunci di Penjamin Platform (Escrow)',
-      signedDate: 'Hari Ini, 12 September 2026',
-      pickupSchedule: '20 September 2026 s/d 23 September 2026',
-      pickupLocation: targetOffer.location,
-      picWarehouse: 'Pengurus Lapangan Poktan Setempat',
-      paymentMethod: 'Pelunasan Transfer 95% saat Timbang Muat',
-      status: 'Terikat',
-      timeline: [
-        { label: 'Penawaran Disepakati Pihak Poktan', date: 'Hari Ini, 12 Sep 2026', completed: true },
-        { label: 'Binding Agreement Diterbitkan Sistem', date: 'Hari Ini, 12 Sep 2026', completed: true },
-        { label: 'Booking Fee 5% Terverifikasi di Platform', date: 'Terkunci Aman di Escrow', completed: true },
-        { label: 'Kedatangan Armada Muat Mandiri', date: 'Dijadwalkan 20 Sep 2026', completed: false },
-        { label: 'Uji Kadar Air, Timbang & Pelunasan', date: 'Estimasi 23 Sep 2026', completed: false }
-      ],
-      clauses: [
-        'Poktan menjamin mutu hasil panen sesuai standar spesifikasi yang disepakati.',
-        'Pembeli PT Royal Agro Minahasa bertanggung jawab menyediakan armada muat mandiri.',
-        'Pelunasan 95% dilakukan saat verifikasi timbang di lokasi gudang penyerahan.'
-      ]
-    };
-
-    setBindingAgreements(prev => [newBinding, ...prev]);
-    setActiveTab('transaksi');
-  };
-
-  // Handle Buyer Counter Negotiation
-  const handleSubmitBuyerCounter = ({ offerId, newPrice, newTon, notes }) => {
-    setOffers(prev => prev.map(o => {
-      if (o.id === offerId) {
-        return {
-          ...o,
-          status: 'Menunggu Respon',
-          offeredPricePerKg: newPrice,
-          requestedTon: newTon,
-          notes: `Negosiasi Ulang Pembeli: ${notes} (Harga diajukan: Rp ${newPrice.toLocaleString('id-ID')}/kg)`
-        };
+    try {
+      // Simpan angka deal dulu agar penguncian memakai tonase final.
+      await updateOfferInSupabase(offerId, {
+        counterPricePerKg: acceptedPrice,
+        counterTon: acceptedTon
+      });
+      // Kunci stok idempoten (lewati bila reservasi saat penawaran masih berlaku).
+      const lock = await ensureStockReserved(offerId);
+      if (!lock.success) {
+        window.alert(lock.error?.message || 'Gagal mengunci stok komoditas.');
+        return;
       }
-      return o;
-    }));
+      await updateOfferInSupabase(offerId, { status: 'Disetujui' });
+
+      const contractPayload = {
+        contractCode: `AC-AGR/2026/IX/00${bindingAgreements.length + 60}`,
+        offerId: targetOffer.id,
+        commodityId,
+        productName: targetOffer.commodityName,
+        farmerId: targetOffer.farmerId,
+        farmerName: targetOffer.farmerGroup,
+        buyerId: currentBuyerId,
+        buyerName: buyerProfile.companyName || buyerProfile.name,
+        tonnage: acceptedTon,
+        pricePerKg: acceptedPrice,
+        totalValue: totalVal,
+        bookingFee: totalVal * 0.05,
+        pickupSchedule: targetOffer.pickupDate || '7 Hari ke Depan',
+        pickupLocation: targetOffer.pickupLocation || 'Minahasa',
+        paymentMethod: targetOffer.paymentMethod || 'Pembayaran Langsung'
+      };
+
+      const { data: newContract, error: contractError } = await createContractInSupabase(contractPayload);
+      if (!newContract) throw new Error(contractError || 'Gagal membuat kontrak binding.');
+      setBindingAgreements(prev => [newContract, ...prev]);
+
+      const newTrx = await createTransactionInSupabase({
+        contractId: newContract.id,
+        buyerId: currentBuyerId,
+        farmerId: targetOffer.farmerId,
+        farmerGroup: targetOffer.farmerGroup,
+        commodityName: targetOffer.commodityName,
+        volumeTon: acceptedTon,
+        category: targetOffer.category,
+        amount: totalVal,
+        status: 'Berjalan',
+        pickupSchedule: targetOffer.pickupLocation || 'Minahasa',
+        paymentMethod: targetOffer.paymentMethod || 'Pembayaran Langsung',
+        notes: JSON.stringify({
+          paymentMethod: targetOffer.paymentMethod || 'Pembayaran Langsung',
+          notes: targetOffer.notes || ''
+        })
+      });
+      if (!newTrx?.data) throw new Error(newTrx?.error || 'Gagal membuat transaksi.');
+      setTransactions(prev => [newTrx.data, ...prev]);
+
+      notifyOfferAcceptedToFarmer({
+        farmerId: targetOffer.farmerId,
+        commodityName: targetOffer.commodityName || 'Komoditas',
+        offerId
+      }).catch(e => console.warn('notifyOfferAcceptedToFarmer error:', e));
+
+      setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui', offeredPricePerKg: acceptedPrice, requestedTon: acceptedTon, commodityId } : o));
+      setActiveTab('pembayaran');
+    } catch (err) {
+      console.warn('Gagal memproses persetujuan penawaran:', err);
+      await ensureStockRestored(offerId);
+      window.alert(`Gagal memproses persetujuan: ${err?.message || err}`);
+    }
   };
 
-  // Cancel / Delete Offer
-  const handleCancelOffer = (offerId) => {
-    setOffers(prev => prev.filter(o => o.id !== offerId));
+  // Handle Buyer Counter Negotiation (Connected to Supabase)
+  const handleSubmitBuyerCounter = async ({ offerId, newPrice, newTon, notes }) => {
+    const targetOffer = offers.find(o => o.id === offerId);
+    try {
+      await updateOfferInSupabase(offerId, {
+        status: 'Counter-Offer',
+        counterPricePerKg: newPrice,
+        counterTon: newTon,
+        counterNotes: notes || '',
+        counterBy: 'pembeli'
+      });
+      setOffers(prev => prev.map(o => {
+        if (o.id === offerId) {
+          return {
+            ...o,
+            status: 'Counter-Offer',
+            counterPricePerKg: newPrice,
+            counterTon: newTon,
+            counterNotes: notes || '',
+            counterBy: 'pembeli',
+            notes: notes ? `Tawaran Balik Pembeli: ${notes} (Harga: Rp ${Number(newPrice).toLocaleString('id-ID')}/kg, Volume: ${newTon} Ton)` : (o.notes || '')
+          };
+        }
+        return o;
+      }));
+
+      notifyOfferCounteredByBuyer({
+        farmerId: targetOffer?.farmerId,
+        commodityName: targetOffer?.commodityName || 'Komoditas',
+        offerId
+      }).catch(e => console.warn('notifyOfferCounteredByBuyer error:', e));
+    } catch (err) {
+      console.warn('Gagal mengirim counter offer:', err);
+    }
   };
+
+  // Cancel / Delete Offer — batalkan transaksi terkait (kecuali lunas),
+  // kembalikan reservasi stok, lalu tandai offer Dibatalkan.
+  const handleCancelOffer = async (offerId) => {
+    const targetOffer = offers.find(o => o.id === offerId);
+    try {
+      // 1. Transaksi terkait: tolak bila sudah lunas, batalkan sisanya.
+      try {
+        const { data: linkedContracts } = await supabase
+          .from('contracts')
+          .select('id')
+          .eq('offer_id', offerId);
+        const cIds = (linkedContracts || []).map(c => c.id);
+        if (cIds.length > 0) {
+          const { data: linkedTrxs } = await supabase
+            .from('transactions')
+            .select('id, status')
+            .in('contract_id', cIds);
+          if ((linkedTrxs || []).some(t => t.status === 'Selesai')) {
+            window.alert('Penawaran ini sudah lunas dan tidak dapat dibatalkan.');
+            return;
+          }
+          for (const t of (linkedTrxs || [])) {
+            if (t.status !== 'Dibatalkan') {
+              await supabase.from('transactions').update({ status: 'Dibatalkan' }).eq('id', t.id);
+            }
+          }
+          try {
+            await supabase.from('contracts').update({ status: 'Dibatalkan' }).in('id', cIds);
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.warn('Gagal membatalkan transaksi terkait:', e);
+      }
+      // 2. Offer + stok (idempoten: lewati bila tak pernah dikunci).
+      await updateOfferInSupabase(offerId, { status: 'Dibatalkan' });
+      if (targetOffer) await ensureStockRestored(offerId);
+      setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Dibatalkan' } : o));
+    } catch (err) {
+      console.warn('Gagal membatalkan penawaran:', err);
+    }
+  };
+
 
   // Handle Bug Submit
   const handleSendBugReport = (e) => {
@@ -197,7 +823,7 @@ export default function BuyerDashboard({
   const getPageTitle = () => {
     switch (activeTab) {
       case 'dashboard':
-        return 'Dashboard Pengadaan';
+        return 'Transaksi';
       case 'katalog':
         return 'Cari Komoditas';
       case 'watchlist':
@@ -207,17 +833,23 @@ export default function BuyerDashboard({
       case 'penawaran':
         return 'Lihat Penawaran';
       case 'transaksi':
-        return 'Riwayat Pengadaan';
+        return 'Daftar Penawaran';
+      case 'riwayat-transaksi':
+        return 'Transaksi';
       case 'harga-pasar':
         return 'Harga Acuan Pasar';
       case 'pembayaran':
-        return 'Pembayaran & Escrow';
+        return 'Pembayaran';
       case 'pesan':
         return 'Pesan & Negosiasi';
+      case 'laporkan-masalah':
+        return 'Laporkan Masalah';
       case 'pengaturan':
         return 'Pengaturan';
+      case 'notifikasi':
+        return 'Notifikasi';
       default:
-        return 'Dashboard Pengadaan';
+        return 'Transaksi';
     }
   };
 
@@ -271,8 +903,8 @@ export default function BuyerDashboard({
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('dashboard'); setMobileSidebarOpen(false); }}
-                title="Dashboard Pengadaan"
+                onClick={() => { handleTabChange('dashboard'); setMobileSidebarOpen(false); }}
+                title="Transaksi"
               >
                 {activeTab === 'dashboard' && <span className="clone-active-indicator" />}
                 <SquaresFour size={18} weight={activeTab === 'dashboard' ? 'fill' : 'regular'} className="clone-nav-icon" />
@@ -315,41 +947,39 @@ export default function BuyerDashboard({
                       <button
                         type="button"
                         className={`clone-subnav-item ${activeTab === 'katalog' ? 'active' : ''}`}
-                        onClick={() => { setActiveTab('katalog'); setMobileSidebarOpen(false); }}
+                        onClick={() => { handleTabChange('katalog'); setMobileSidebarOpen(false); }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Eye size={13} />
                           <span>Cari Komoditas</span>
                         </div>
-                        <span className="clone-nav-badge">{commodities.length}</span>
                       </button>
 
                       {/* 2. Lihat Penawaran */}
                       <button
                         type="button"
                         className={`clone-subnav-item ${activeTab === 'penawaran' ? 'active' : ''}`}
-                        onClick={() => { setActiveTab('penawaran'); setMobileSidebarOpen(false); }}
+                        onClick={() => { handleTabChange('penawaran'); setMobileSidebarOpen(false); }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <BookmarkSimple size={13} />
                           <span>Lihat Penawaran</span>
                         </div>
-                        <span className="clone-nav-badge">{offers.length}</span>
                       </button>
 
                       {/* 3. Ajukan Penawaran */}
                       <button
                         type="button"
-                        className="clone-subnav-item"
+                        className={`clone-subnav-item ${activeTab === 'ajukan-penawaran' ? 'active' : ''}`}
                         onClick={() => {
-                          setActiveTab('katalog');
-                          setAddOfferModalRequested(true);
+                          setSelectedOfferCommodity(null);
+                          handleTabChange('ajukan-penawaran');
                           setMobileSidebarOpen(false);
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <PlusCircle size={13} color="#5452f6" weight="bold" />
-                          <span style={{ color: '#5452f6', fontWeight: 600 }}>Ajukan Penawaran</span>
+                          <PlusCircle size={14} weight={activeTab === 'ajukan-penawaran' ? 'bold' : 'regular'} />
+                          <span>Ajukan Penawaran</span>
                         </div>
                       </button>
                     </motion.div>
@@ -357,23 +987,23 @@ export default function BuyerDashboard({
                 </AnimatePresence>
               </div>
 
-              {/* 3. Riwayat Pengadaan */}
+              {/* 3. Daftar Penawaran */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'transaksi' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('transaksi'); setMobileSidebarOpen(false); }}
-                title="Riwayat Pengadaan"
+                onClick={() => { handleTabChange('transaksi'); setMobileSidebarOpen(false); }}
+                title="Daftar Penawaran Komoditas"
               >
                 {activeTab === 'transaksi' && <span className="clone-active-indicator" />}
                 <Receipt size={18} weight={activeTab === 'transaksi' ? 'fill' : 'regular'} className="clone-nav-icon" />
-                <span className="clone-nav-label">Riwayat Pengadaan</span>
+                <span className="clone-nav-label">Daftar Penawaran</span>
               </button>
 
               {/* 4. Harga Pasar */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'harga-pasar' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('harga-pasar'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('harga-pasar'); setMobileSidebarOpen(false); }}
                 title="Harga Pasar Acuan"
               >
                 {activeTab === 'harga-pasar' && <span className="clone-active-indicator" />}
@@ -385,7 +1015,7 @@ export default function BuyerDashboard({
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pembayaran' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pembayaran'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pembayaran'); setMobileSidebarOpen(false); }}
                 title="Pembayaran & Rekening Bersama Escrow"
               >
                 {activeTab === 'pembayaran' && <span className="clone-active-indicator" />}
@@ -393,17 +1023,28 @@ export default function BuyerDashboard({
                 <span className="clone-nav-label">Pembayaran</span>
               </button>
 
+              {/* 6. Riwayat Transaksi (Tepat di bawah Pembayaran) */}
+              <button
+                type="button"
+                className={`clone-nav-item ${activeTab === 'riwayat-transaksi' ? 'active' : ''}`}
+                onClick={() => { handleTabChange('riwayat-transaksi'); setMobileSidebarOpen(false); }}
+                title="Riwayat Transaksi Selesai & Review"
+              >
+                {activeTab === 'riwayat-transaksi' && <span className="clone-active-indicator" />}
+                <ClockCounterClockwise size={18} weight={activeTab === 'riwayat-transaksi' ? 'bold' : 'regular'} className="clone-nav-icon" />
+                <span className="clone-nav-label">Riwayat Transaksi</span>
+              </button>
+
               {/* 6. Pesan & Negosiasi */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pesan' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pesan'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pesan'); setMobileSidebarOpen(false); }}
                 title="Pesan & Negosiasi"
               >
                 {activeTab === 'pesan' && <span className="clone-active-indicator" />}
                 <ChatCircleText size={18} weight={activeTab === 'pesan' ? 'fill' : 'regular'} className="clone-nav-icon" />
                 <span className="clone-nav-label">Pesan & Nego</span>
-                <span className="clone-nav-badge">2</span>
               </button>
 
             </div>
@@ -414,11 +1055,37 @@ export default function BuyerDashboard({
             <div className="clone-section-title">GENERAL</div>
             <div className="clone-nav-list">
               
-              {/* 1. Pengaturan */}
+              {/* 1. Notifikasi */}
+              <button
+                type="button"
+                className={`clone-nav-item ${activeTab === 'notifikasi' ? 'active' : ''}`}
+                onClick={() => { handleTabChange('notifikasi'); setMobileSidebarOpen(false); }}
+                title="Notifikasi"
+              >
+                {activeTab === 'notifikasi' && <span className="clone-active-indicator" />}
+                <Bell size={18} weight={activeTab === 'notifikasi' ? 'fill' : 'regular'} className="clone-nav-icon" />
+                <span className="clone-nav-label">Notifikasi</span>
+                {notifUnreadCount > 0 && (
+                  <span style={{
+                    marginLeft: 'auto',
+                    backgroundColor: '#ef4444',
+                    color: '#ffffff',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    borderRadius: '999px',
+                    padding: '1px 6px',
+                    lineHeight: 1.2
+                  }}>
+                    {notifUnreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* 2. Pengaturan */}
               <button
                 type="button"
                 className={`clone-nav-item ${activeTab === 'pengaturan' ? 'active' : ''}`}
-                onClick={() => { setActiveTab('pengaturan'); setMobileSidebarOpen(false); }}
+                onClick={() => { handleTabChange('pengaturan'); setMobileSidebarOpen(false); }}
                 title="Pengaturan"
               >
                 {activeTab === 'pengaturan' && <span className="clone-active-indicator" />}
@@ -426,22 +1093,23 @@ export default function BuyerDashboard({
                 <span className="clone-nav-label">Pengaturan</span>
               </button>
 
-              {/* 2. Laporkan Bug */}
+              {/* 2. Laporkan Masalah */}
               <button
                 type="button"
-                className="clone-nav-item"
-                onClick={() => { setBugModalOpen(true); setMobileSidebarOpen(false); }}
-                title="Laporkan Bug"
+                className={`clone-nav-item ${activeTab === 'laporkan-masalah' ? 'active' : ''}`}
+                onClick={() => { handleTabChange('laporkan-masalah'); setMobileSidebarOpen(false); }}
+                title="Laporkan Masalah & Kendala"
               >
-                <Bug size={18} weight="regular" className="clone-nav-icon" />
-                <span className="clone-nav-label">Laporkan Bug</span>
+                {activeTab === 'laporkan-masalah' && <span className="clone-active-indicator" />}
+                <Bug size={18} weight={activeTab === 'laporkan-masalah' ? 'fill' : 'regular'} className="clone-nav-icon" />
+                <span className="clone-nav-label">Laporkan Masalah</span>
               </button>
 
               {/* 4. Logout */}
               <button
                 type="button"
                 className="clone-nav-item clone-logout-item"
-                onClick={onBackToHome}
+                onClick={handleLogout}
                 title="Logout"
               >
                 <SignOut size={18} weight="bold" className="clone-nav-icon" />
@@ -481,7 +1149,7 @@ export default function BuyerDashboard({
       )}
 
       {/* ================= MAIN CONTENT AREA ================= */}
-      <div className="clone-main-content">
+      <div className={`clone-main-content ${activeTab === 'pesan' ? 'pesan-page-active' : ''}`}>
         
         {/* Top Bar */}
         <header className="clone-topbar">
@@ -544,36 +1212,22 @@ export default function BuyerDashboard({
               <EnvelopeSimple size={18} weight="regular" />
             </button>
 
-            {/* Notification Bell */}
-            <div style={{ position: 'relative' }}>
-              <button 
-                type="button" 
-                className="clone-icon-btn"
-                onClick={() => setNotifDropdownOpen(!notifDropdownOpen)}
-                title="Pemberitahuan"
-              >
-                <Bell size={18} weight="regular" />
-                <span className="clone-notif-dot" />
-              </button>
-
-              {/* Notification Popover */}
-              {notifDropdownOpen && (
-                <div className="clone-notif-popover">
-                  <div className="clone-popover-header">
-                    <span style={{ fontWeight: 700, fontSize: '0.84rem' }}>Pemberitahuan Pembeli</span>
-                    <span style={{ fontSize: '0.72rem', color: '#5452f6', cursor: 'pointer' }}>Tandai Dibaca</span>
-                  </div>
-                  <div className="clone-popover-list">
-                    {notifications.map(n => (
-                      <div key={n.id} className="clone-popover-item">
-                        <div style={{ fontSize: '0.78rem', color: '#1e293b' }}>{n.text}</div>
-                        <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginTop: '2px' }}>{n.time}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Notification Bell & Real-time Dropdown */}
+            <NotificationDropdown 
+              isOpen={notifDropdownOpen}
+              onToggle={() => setNotifDropdownOpen(!notifDropdownOpen)}
+              onClose={() => setNotifDropdownOpen(false)}
+              role="pembeli"
+              notifications={realNotifications}
+              unreadCount={notifUnreadCount}
+              isLoading={notifLoading}
+              error={notifError}
+              onRefresh={refreshNotifications}
+              onMarkAsRead={markNotificationAsRead}
+              onMarkAllAsRead={markAllNotificationsAsRead}
+              onNotificationClick={handleNotificationClick}
+              onViewAll={() => handleTabChange('notifikasi')}
+            />
 
             {/* User Profile Pill with Dropdown */}
             <div style={{ position: 'relative' }}>
@@ -582,24 +1236,36 @@ export default function BuyerDashboard({
                 onClick={() => setProfileMenuOpen(!profileMenuOpen)}
                 title="Menu Akun"
               >
-                <img 
-                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80" 
-                  alt="Hendra Pratama" 
-                  className="clone-user-avatar"
-                />
-                <div className="clone-user-meta">
-                  <div className="clone-user-name">{buyerProfile.name.split(',')[0]}</div>
-                  <div className="clone-user-role">Pembeli</div>
-                </div>
-                <CaretDown 
-                  size={12} 
-                  weight="bold" 
-                  color="#64748b" 
-                  style={{ 
-                    transform: profileMenuOpen ? 'rotate(180deg)' : 'none', 
-                    transition: 'transform 0.2s ease' 
-                  }} 
-                />
+                {isLoadingProfile && !buyerProfile?.name ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '2px 4px' }}>
+                    <div className="agri-skeleton-avatar" style={{ width: '32px', height: '32px' }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div className="agri-skeleton-text" style={{ width: '70px', height: '12px' }} />
+                      <div className="agri-skeleton-text" style={{ width: '45px', height: '10px' }} />
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <img 
+                      src={buyerProfile?.avatar || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&auto=format&fit=crop&q=80"} 
+                      alt={buyerProfile?.name || "Pembeli"} 
+                      className="clone-user-avatar"
+                    />
+                    <div className="clone-user-meta">
+                      <div className="clone-user-name">{buyerProfile?.name || 'Pembeli'}</div>
+                      <div className="clone-user-role">{getDisplayRole(buyerProfile?.role)}</div>
+                    </div>
+                    <CaretDown 
+                      size={12} 
+                      weight="bold" 
+                      color="#64748b" 
+                      style={{ 
+                        transform: profileMenuOpen ? 'rotate(180deg)' : 'none', 
+                        transition: 'transform 0.2s ease' 
+                      }} 
+                    />
+                  </>
+                )}
               </div>
 
               {/* Backdrop to close on outside click */}
@@ -621,8 +1287,8 @@ export default function BuyerDashboard({
                     transition={{ duration: 0.15 }}
                   >
                     <div className="clone-profile-dropdown-header">
-                      <div className="clone-dropdown-name">{buyerProfile.name}</div>
-                      <span className="clone-dropdown-role">Pembeli</span>
+                      <div className="clone-dropdown-name">{buyerProfile?.name || 'Pembeli'}</div>
+                      <span className="clone-dropdown-role">{getDisplayRole(buyerProfile?.role)}</span>
                     </div>
 
                     <div className="clone-profile-dropdown-divider" />
@@ -661,7 +1327,7 @@ export default function BuyerDashboard({
                       className="clone-profile-dropdown-item danger"
                       onClick={() => {
                         setProfileMenuOpen(false);
-                        if (onBackToHome) onBackToHome();
+                        handleLogout();
                       }}
                     >
                       <SignOut size={16} weight="bold" className="clone-dropdown-item-icon" />
@@ -677,72 +1343,157 @@ export default function BuyerDashboard({
         </header>
 
         {/* Dynamic Main Body Content */}
-        <div className="clone-page-body">
+        <div className={`clone-page-body ${activeTab === 'pesan' ? 'pesan-active-body' : ''}`}>
           
-          {/* TAB 1: OVERVIEW */}
+          {/* TAB 1: CLONE DASHBOARD OVERVIEW */}
           {activeTab === 'dashboard' && (
-            <BuyerCloneOverview 
+            <RingkasanPembeli 
               onNavigate={(tab) => setActiveTab(tab)}
               marketPrices={marketPrices}
               offers={offers}
+              transactions={transactions}
+              proposals={proposals}
+              buyerProfile={buyerProfile}
+              isLoading={isLoadingData}
             />
           )}
 
           {/* TAB 2: KATALOG KOMODITAS & SUB-TABS */}
           {(activeTab === 'katalog' || activeTab === 'watchlist' || activeTab === 'rfq') && (
-            <BuyerCatalog 
+            <CariKomoditas 
               commodities={commodities}
               watchlist={watchlist}
               onSubmitOffer={handleAddNewOffer}
+              onStartOffer={(commodity) => {
+                setSelectedOfferCommodity(commodity);
+                setActiveTab('ajukan-penawaran');
+              }}
               initialModalOpen={addOfferModalRequested}
               onModalClose={() => setAddOfferModalRequested(false)}
+              isLoading={isLoadingData}
+            />
+          )}
+
+          {/* TAB: AJUKAN PENAWARAN (HALAMAN AJUKAN PENAWARAN) */}
+          {activeTab === 'ajukan-penawaran' && (
+            <AjukanPenawaran 
+              proposals={proposals}
+              buyerProfile={buyerProfile}
+              currentBuyerId={currentBuyerId}
+              commodities={commodities}
+              initialCommodity={selectedOfferCommodity}
+              isLoading={isLoadingData}
+              onAddProposal={(newProp) => {
+                setProposals(prev => (prev.some(p => p.id === newProp.id) ? prev : [newProp, ...prev]));
+              }}
+              onEditProposal={(updatedProp) => {
+                setProposals(prev => prev.map(p => (p.id === updatedProp.id || (updatedProp.dbId && p.dbId === updatedProp.dbId)) ? { ...p, ...updatedProp } : p));
+              }}
+              onCancelProposal={(propId) => {
+                setProposals(prev => prev.map(p => p.id === propId ? {
+                  ...p,
+                  status: 'Tidak Aktif',
+                  statusDetail: 'Dibatalkan Pembeli',
+                  rejectionReason: 'Dibatalkan oleh pembeli sebelum diverifikasi admin.'
+                } : p));
+              }}
+              onDeleteProposal={(propId) => {
+                setProposals(prev => prev.filter(p => p.id !== propId));
+              }}
+              onNavigate={(tab) => setActiveTab(tab)}
             />
           )}
 
           {/* TAB 3: PENAWARAN SAYA */}
           {activeTab === 'penawaran' && (
-            <BuyerOffers 
+            <LihatPenawaran 
               offers={offers}
+              isLoading={isLoadingData}
               onAcceptCounterOffer={handleAcceptCounterOffer}
               onSubmitBuyerCounter={handleSubmitBuyerCounter}
-              onProceedToBinding={() => setActiveTab('transaksi')}
+              onProceedToBinding={() => setActiveTab('pembayaran')}
               onCancelOffer={handleCancelOffer}
             />
           )}
 
-          {/* TAB 5: RIWAYAT PENGADAAN */}
+          {/* TAB 4: DAFTAR PENAWARAN (PENGADAAN) */}
           {activeTab === 'transaksi' && (
-            <BuyerTransactions 
+            <RiwayatPengadaanPembeli 
               transactions={transactions}
+              offers={offers}
+              proposals={proposals}
+              isLoading={isLoadingData}
               onNavigate={(tab) => setActiveTab(tab)}
+              onCancelOffer={handleCancelOffer}
             />
           )}
 
           {/* TAB 6: HARGA PASAR */}
           {activeTab === 'harga-pasar' && (
-            <BuyerMarketPrice 
+            <HargaPasarPembeli 
               marketPrices={marketPrices}
+              isLoading={isLoadingData}
             />
           )}
 
           {/* TAB 7: PEMBAYARAN & ESCROW */}
           {activeTab === 'pembayaran' && (
-            <BuyerPayment 
+            <PembayaranPembeli 
               payments={payments}
+              isLoading={isLoadingData}
+              onNavigate={(tab) => setActiveTab(tab)}
+            />
+          )}
+
+          {/* TAB: RIWAYAT TRANSAKSI (SELESAI) */}
+          {activeTab === 'riwayat-transaksi' && (
+            <RiwayatTransaksiPembeli 
+              payments={payments}
+              transactions={transactions}
+              buyerProfile={buyerProfile}
+              currentBuyerId={currentBuyerId}
+              isLoading={isLoadingData}
               onNavigate={(tab) => setActiveTab(tab)}
             />
           )}
 
           {/* TAB 8: PESAN & NEGOSIASI */}
           {activeTab === 'pesan' && (
-            <BuyerChatView />
+            <PesanPembeli 
+              currentUserId={currentBuyerId}
+              currentUserProfile={buyerProfile}
+            />
           )}
 
           {/* TAB 8: PROFIL PERUSAHAAN */}
           {activeTab === 'pengaturan' && (
-            <BuyerProfile 
+            <PengaturanPembeli 
               profile={buyerProfile}
               onUpdateProfile={(updated) => setBuyerProfile(updated)}
+              onLogout={handleLogout}
+            />
+          )}
+
+          {/* TAB 9: LAPORKAN MASALAH / BUG */}
+          {activeTab === 'laporkan-masalah' && (
+            <LaporkanMasalah 
+              userRole="pembeli"
+              onBack={() => handleTabChange('dashboard')}
+            />
+          )}
+
+          {/* TAB 10: SEMUA NOTIFIKASI REAL-TIME */}
+          {activeTab === 'notifikasi' && (
+            <NotificationPage 
+              role="pembeli"
+              notifications={realNotifications}
+              isLoading={notifLoading}
+              error={notifError}
+              unreadCount={notifUnreadCount}
+              onRefresh={refreshNotifications}
+              onMarkAsRead={markNotificationAsRead}
+              onMarkAllAsRead={markAllNotificationsAsRead}
+              onNotificationClick={handleNotificationClick}
             />
           )}
 

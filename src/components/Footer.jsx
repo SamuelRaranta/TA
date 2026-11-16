@@ -60,7 +60,7 @@ export default function Footer({
               <li><a href="#harga-pasar" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Harga Pasar Nasional</a></li>
               <li><a href="#keunggulan" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Keunggulan Platform</a></li>
               <li><a href="#komoditas" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Jelajahi Komoditas</a></li>
-              <li><a href="#alur-binding" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Alur Kontrak Binding</a></li>
+              <li><a href="#portal-akses" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Akses Portal Pengguna</a></li>
               <li><a href="#faq" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>FAQ & Pertanyaan Umum</a></li>
             </ul>
           </div>

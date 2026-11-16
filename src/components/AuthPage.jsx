@@ -12,52 +12,485 @@ import {
   ShieldCheck,
   Check,
   Key,
-  LockKey
+  LockKey,
+  WarningCircle,
+  CircleNotch,
+  Sparkle
 } from '@phosphor-icons/react';
+import { supabase } from '../lib/supabaseClient';
+import { notifyNewUserRegistered } from '../lib/notificationService';
 
-export default function AuthPage({ 
-  initialMode = 'login', 
+// Helper to extract auth tokens and codes from any URL format
+export const extractAuthParamsFromUrl = (url = window.location.href) => {
+  const result = {};
+
+  // 1. Search in query string (?...)
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    for (const [key, val] of searchParams.entries()) {
+      result[key] = val;
+    }
+  } catch (e) {}
+
+  // 2. Search in hash fragments (#...)
+  const hashParts = (url || '').split('#').slice(1);
+  for (const part of hashParts) {
+    const subParts = part.split('?');
+    for (const sub of subParts) {
+      if (sub.includes('=')) {
+        const pairs = sub.split('&');
+        for (const pair of pairs) {
+          const [rawKey, ...valParts] = pair.split('=');
+          const key = decodeURIComponent(rawKey).trim();
+          const val = decodeURIComponent(valParts.join('=')).trim();
+          if (key && val) {
+            result[key] = val;
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Fallback regex patterns
+  if (!result.access_token) {
+    const m = url.match(/access_token=([^&]+)/);
+    if (m) result.access_token = decodeURIComponent(m[1]);
+  }
+  if (!result.refresh_token) {
+    const m = url.match(/refresh_token=([^&]+)/);
+    if (m) result.refresh_token = decodeURIComponent(m[1]);
+  }
+  if (!result.code) {
+    const m = url.match(/[?&]code=([^&#]+)/);
+    if (m) result.code = decodeURIComponent(m[1]);
+  }
+  if (!result.type) {
+    const m = url.match(/[?&#]type=([^&#]+)/);
+    if (m) result.type = decodeURIComponent(m[1]);
+  }
+
+  return result;
+};
+
+const isRecoveryPending = () => {
+  try {
+    return sessionStorage.getItem('agriconnect_recovery_pending') === '1';
+  } catch (e) {
+    return false;
+  }
+};
+
+const clearRecoveryPending = () => {
+  try {
+    sessionStorage.removeItem('agriconnect_recovery_pending');
+  } catch (e) {}
+};
+
+export default function AuthPage({
+  initialMode = 'login',
   initialRole = 'petani',
-  onBackToHome, 
-  theme, 
+  onBackToHome,
+  theme,
   onToggleTheme,
   onNavigateToDashboard,
-  onNavigateToBuyerDashboard
+  onNavigateToBuyerDashboard,
+  onNavigateToAdminDashboard
 }) {
-  const [mode, setMode] = useState(initialMode); // 'login' | 'signup' | 'forgot'
-  const [role, setRole] = useState(initialRole); // 'petani' | 'pembeli'
+  // Jika mendarat dari link email recovery, langsung buka form ganti-password
+  // (jangan flash login dulu).
+  const [mode, setMode] = useState(() => (isRecoveryPending() ? 'update_password' : initialMode)); // 'login' | 'signup' | 'forgot'
+  const [role, setRole] = useState(initialRole); // 'petani' | 'pembeli' | 'admin'
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [signupSent, setSignupSent] = useState(false);
 
   useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
+    // Jangan timpa form ganti-password yang sedang dibuka dari link email.
+    if (isRecoveryPending()) {
+      setMode('update_password');
+    } else {
+      setMode(initialMode);
+    }
+    setRole(initialRole);
+    setErrorMessage('');
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setIsSuccess(true);
-    setTimeout(() => {
-      setIsSuccess(false);
-      if (role === 'petani') {
-        if (onNavigateToDashboard) {
-          onNavigateToDashboard();
-        } else {
-          window.location.hash = '#/dashboard/petani';
+    let cancelled = false;
+
+    // Alur recovery deterministik: JANGAN hanya andalkan event
+    // PASSWORD_RECOVERY (bisa tiba sebelum subscribe, lalu hilang).
+    // Flag ditangkap di main.jsx sebelum client menghapus token dari URL.
+    const bootRecovery = async () => {
+      const pending = isRecoveryPending();
+      const params = extractAuthParamsFromUrl();
+      const hasParams = Boolean(
+        params.code ||
+        (params.access_token && params.refresh_token) ||
+        params.token_hash
+      );
+
+      // 1. Sesi sudah ada (mis. client init otomatis dari URL) -> langsung form.
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (session) {
+          if (pending || params.type === 'recovery') {
+            setMode('update_password');
+          }
+          return;
         }
-      } else if (role === 'pembeli') {
-        if (onNavigateToBuyerDashboard) {
-          onNavigateToBuyerDashboard();
-        } else {
-          window.location.hash = '#/dashboard/pembeli';
+      } catch (e) {}
+
+      // 2. Tukar parameter URL menjadi sesi pemulihan.
+      if (hasParams) {
+        try {
+          if (params.code) {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
+            if (!error && data?.session) {
+              console.log('[AuthPage] PKCE recovery session established');
+              if (!cancelled) setMode('update_password');
+              return;
+            }
+          } else if (params.access_token && params.refresh_token) {
+            const { data, error } = await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token
+            });
+            if (!error && data?.session) {
+              console.log('[AuthPage] Recovery session established from URL tokens');
+              if (!cancelled) setMode('update_password');
+              return;
+            }
+          } else if (params.token_hash) {
+            const { data, error } = await supabase.auth.verifyOtp({
+              token_hash: params.token_hash,
+              type: 'recovery'
+            });
+            if (!error && data?.session) {
+              console.log('[AuthPage] Recovery session established via token_hash');
+              if (!cancelled) setMode('update_password');
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[AuthPage] recovery session warning:', e);
         }
-      } else {
-        onBackToHome();
+        if (!cancelled) {
+          // Parameter ada tapi sesi gagal dibentuk (kedaluwarsa/terpakai):
+          // tampilkan form + pesan, jangan lempar diam-diam ke login.
+          setMode('update_password');
+          setErrorMessage('Tautan pemulihan tidak valid atau sudah dipakai. Silakan minta tautan baru lewat Lupa Kata Sandi.');
+        }
+        return;
       }
-    }, 1200);
+
+      // 3. Flag ada tapi tanpa sesi/parameter: arahkan minta tautan baru.
+      if (pending && !cancelled) {
+        setMode('update_password');
+        setErrorMessage('Sesi pemulihan tidak ditemukan. Silakan minta tautan baru lewat Lupa Kata Sandi.');
+      }
+    };
+
+    bootRecovery();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && window.location.hash.includes('type=recovery'))) {
+        setMode('update_password');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, [initialMode, initialRole]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setIsLoading(true);
+
+    try {
+      if (mode === 'login') {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password
+        });
+
+        if (error) {
+          console.warn('Login error:', error.message);
+          if (error.message.includes('Email not confirmed')) {
+            setErrorMessage('Email Anda belum dikonfirmasi. Silakan periksa inbox/spam email Anda dan klik tautan konfirmasi terlebih dahulu.');
+          } else if (error.message.includes('Invalid login credentials')) {
+            setErrorMessage('Email atau password salah.');
+          } else {
+            setErrorMessage('Gagal masuk. Silakan periksa kembali data Anda.');
+          }
+          setIsLoading(false);
+          return;
+        }
+
+        // Determine user role and check admin approval
+        let userRole = null;
+        let kycStatus = 'pending';
+        let profileData = null;
+
+        try {
+          const { data: prof, error: profileError } = await supabase
+            .from('profiles')
+            .select('role, full_name, kyc_status')
+            .eq('id', data.user.id)
+            .maybeSingle();
+
+          if (profileError || !prof) {
+            await supabase.auth.signOut();
+            setErrorMessage('Profil akun tidak dapat diverifikasi. Coba lagi atau hubungi admin.');
+            return;
+          }
+
+          if (prof) {
+            profileData = prof;
+            if (prof.role) userRole = prof.role;
+            if (prof.kyc_status) kycStatus = prof.kyc_status;
+          }
+        } catch (profErr) {
+          console.warn('Profile read warning:', profErr);
+        }
+
+        // Non-admin users must be approved by Admin
+        if (userRole !== 'admin') {
+          if (kycStatus === 'pending') {
+            await supabase.auth.signOut();
+            setErrorMessage('Akun Anda sedang menunggu verifikasi oleh Admin. Anda baru dapat masuk setelah akun disetujui.');
+            setIsLoading(false);
+            return;
+          }
+
+          if (kycStatus === 'rejected') {
+            await supabase.auth.signOut();
+            setErrorMessage('Pendaftaran akun Anda ditolak oleh Admin. Silakan hubungi dukungan platform.');
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        const resolvedUserName = profileData?.full_name || data.user.user_metadata?.full_name || data.user.user_metadata?.name || '';
+        const normalizedRole = (userRole || data.user.user_metadata?.role || '').toLowerCase().trim();
+        const authPayload = {
+          id: data.user.id,
+          email: data.user.email,
+          role: normalizedRole,
+          fullName: resolvedUserName,
+          name: resolvedUserName
+        };
+
+        localStorage.setItem('agriconnect_auth_user', JSON.stringify(authPayload));
+        if (normalizedRole) {
+          localStorage.setItem(`agriconnect_auth_user_${normalizedRole}`, JSON.stringify(authPayload));
+        }
+
+        setIsSuccess(true);
+        setTimeout(() => {
+          setIsSuccess(false);
+          if (normalizedRole === 'admin') {
+            if (onNavigateToAdminDashboard) onNavigateToAdminDashboard();
+            else window.location.hash = '#/dashboard/admin';
+          } else if (normalizedRole === 'pembeli') {
+            if (onNavigateToBuyerDashboard) onNavigateToBuyerDashboard();
+            else window.location.hash = '#/dashboard/pembeli';
+          } else {
+            if (onNavigateToDashboard) onNavigateToDashboard();
+            else window.location.hash = '#/dashboard/petani';
+          }
+        }, 800);
+
+      } else if (mode === 'signup') {
+        const userFullName = fullName.trim() || (role === 'pembeli' ? 'Hendra Pratama' : 'Hengky Mandagi');
+        const defaultPhone = '0812-4321-8765';
+        const defaultLocation = role === 'admin' ? null : 'Minahasa, Sulawesi Utara';
+        const defaultAvatar = role === 'admin'
+          ? 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160&auto=format&fit=crop&q=80'
+          : role === 'pembeli'
+          ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80'
+          : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&auto=format&fit=crop&q=80';
+        
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: password,
+          options: {
+            data: {
+              role: role,
+              full_name: userFullName,
+              phone: defaultPhone,
+              location: defaultLocation,
+              avatar_url: defaultAvatar
+            },
+            emailRedirectTo: window.location.origin
+          }
+        });
+
+        if (error) {
+          setErrorMessage(
+            error.message.includes('already registered')
+              ? 'Email ini sudah terdaftar. Silakan gunakan email lain atau pilih Masuk.'
+              : `Pendaftaran gagal: ${error.message}`
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        // With email confirmation enabled there is no authenticated browser session yet.
+        // The database auth.users trigger creates the pending profile in that case.
+        if (data?.user && data.session) {
+          const { error: profileError } = await supabase.from('profiles').upsert({
+            id: data.user.id,
+            role,
+            full_name: userFullName,
+            email: email.trim(),
+            phone: defaultPhone,
+            location: defaultLocation,
+            avatar_url: defaultAvatar,
+            kyc_status: role === 'admin' ? 'verified' : 'pending'
+          });
+
+          if (profileError) {
+            await supabase.auth.signOut();
+            setErrorMessage('Akun dibuat, tetapi profil belum berhasil disimpan. Silakan coba masuk kembali beberapa saat lagi.');
+            return;
+          }
+        }
+
+        setSignupSent(true);
+        setMode('signup_sent');
+      }
+    } catch (err) {
+      console.error('Unexpected auth error:', err);
+      setErrorMessage(err?.message || 'Terjadi kendala saat memproses permintaan. Silakan coba kembali.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    const targetEmail = (forgotEmail || email).trim();
+    if (!targetEmail) {
+      setErrorMessage('Mohon masukkan email Anda.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      // Mengirimkan URL bersih (tanpa '#') agar Supabase dapat menyematkan token hash dengan standar OAuth2
+      const redirectUrl = `${window.location.origin}${window.location.pathname}`;
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: redirectUrl
+      });
+
+      if (error) {
+        setErrorMessage(`Gagal mengirim tautan reset: ${error.message}`);
+        setIsLoading(false);
+        return;
+      }
+
+      setForgotSent(true);
+    } catch (err) {
+      console.error('Forgot password error:', err);
+      setErrorMessage('Terjadi kendala saat mengirim email pemulihan.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdatePasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (newPassword.length < 6) {
+      setErrorMessage('Kata sandi baru minimal 6 karakter.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      // 1. Pastikan sesi pemulihan aktif
+      let { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        const params = extractAuthParamsFromUrl();
+        if (params.code) {
+          try {
+            const { data: codeData } = await supabase.auth.exchangeCodeForSession(params.code);
+            session = codeData?.session;
+          } catch (e) {}
+        } else if (params.access_token && params.refresh_token) {
+          try {
+            const { data: tokenData } = await supabase.auth.setSession({
+              access_token: params.access_token,
+              refresh_token: params.refresh_token
+            });
+            session = tokenData?.session;
+          } catch (e) {}
+        } else if (params.token_hash) {
+          try {
+            const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+              token_hash: params.token_hash,
+              type: 'recovery'
+            });
+            if (!otpError) session = otpData?.session;
+          } catch (e) {}
+        }
+      }
+
+      if (!session) {
+        setErrorMessage('Sesi pemulihan telah kedaluwarsa atau tidak valid. Silakan ajukan tautan reset kata sandi baru melalui menu Lupa Kata Sandi.');
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Perbarui kata sandi pengguna
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        if (error.message?.includes('Auth session missing') || error.message?.includes('session')) {
+          setErrorMessage('Sesi pemulihan telah kedaluwarsa atau tidak valid. Silakan ajukan tautan reset kata sandi baru melalui menu Lupa Kata Sandi.');
+        } else {
+          setErrorMessage(`Gagal memperbarui kata sandi: ${error.message}`);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      alert('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.');
+      setNewPassword('');
+      setConfirmPassword('');
+      // Bersihkan flag recovery + keluar dari sesi pemulihan agar state bersih.
+      clearRecoveryPending();
+      await supabase.auth.signOut().catch(() => {});
+      setMode('login');
+      window.location.hash = '#/login';
+      if (window.history?.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + '#/login');
+      }
+    } catch (err) {
+      console.error('Update password exception:', err);
+      setErrorMessage('Terjadi kendala saat memperbarui kata sandi.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -341,6 +774,7 @@ export default function AuthPage({
                 if (mode === 'login') {
                   setMode('signup');
                 } else {
+                  if (mode === 'update_password') clearRecoveryPending();
                   setMode('login');
                 }
                 setIsSuccess(false);
@@ -375,13 +809,25 @@ export default function AuthPage({
                         Masukkan email akun Anda untuk menerima instruksi pemulihan kata sandi.
                       </p>
 
-                      <form 
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          setForgotSent(true);
-                        }} 
-                        className="auth-form-fields"
-                      >
+                      {errorMessage && (
+                        <div style={{ 
+                          margin: '0.6rem 0', 
+                          padding: '0.55rem 0.75rem', 
+                          background: '#fef2f2', 
+                          border: '1px solid #fecaca', 
+                          borderRadius: '8px', 
+                          fontSize: '0.74rem', 
+                          color: '#991b1b',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <WarningCircle size={16} color="#dc2626" weight="bold" />
+                          <span>{errorMessage}</span>
+                        </div>
+                      )}
+
+                      <form onSubmit={handleForgotSubmit} className="auth-form-fields">
                         <div className="auth-field-group">
                           <label className="auth-label">Email Terdaftar</label>
                           <input 
@@ -402,17 +848,22 @@ export default function AuthPage({
 
                         <motion.button
                           type="submit"
-                          whileHover={{ scale: 1.01 }}
-                          whileTap={{ scale: 0.98 }}
+                          disabled={isLoading}
+                          whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                          whileTap={{ scale: isLoading ? 1 : 0.98 }}
                           className="auth-submit-btn"
-                          style={{ marginTop: '0.4rem', marginBottom: '0.85rem' }}
+                          style={{ marginTop: '0.4rem', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                         >
-                          Kirim Link Pemulihan
+                          {isLoading && <CircleNotch size={18} className="animate-spin" weight="bold" />}
+                          <span>{isLoading ? 'Mengirim...' : 'Kirim Link Pemulihan'}</span>
                         </motion.button>
 
                         <button
                           type="button"
-                          onClick={() => setMode('login')}
+                          onClick={() => {
+                            setErrorMessage('');
+                            setMode('login');
+                          }}
                           className="auth-back-to-login-btn"
                         >
                           <ArrowLeft size={16} weight="bold" />
@@ -455,13 +906,134 @@ export default function AuthPage({
 
                       <button
                         type="button"
-                        onClick={() => setForgotSent(false)}
+                        onClick={handleForgotSubmit}
                         className="auth-resend-link"
                       >
                         Belum menerima email? Kirim ulang
                       </button>
                     </motion.div>
                   )
+                ) : mode === 'signup_sent' ? (
+                  /* ====== SIGNUP EMAIL CONFIRMATION NOTIFICATION ====== */
+                  <motion.div
+                    key="signup-sent"
+                    initial={{ opacity: 0, scale: 0.94 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.94 }}
+                    transition={{ duration: 0.28 }}
+                    className="auth-forgot-success-box"
+                  >
+                    <div className="auth-forgot-success-icon">
+                      <CheckCircle size={34} weight="fill" />
+                    </div>
+                    <h2 className="auth-heading" style={{ fontSize: '1.45rem', marginBottom: '0.35rem' }}>
+                      Pendaftaran Berhasil!
+                    </h2>
+                    <p className="auth-subheading" style={{ marginBottom: '1.35rem', textAlign: 'center', lineHeight: 1.55 }}>
+                      Tautan konfirmasi telah dikirim ke <strong>{email}</strong>. Silakan periksa kotak masuk atau spam email Anda dan klik tautan tersebut untuk memverifikasi keaslian email Anda.<br/><br/>
+                      Setelah email diverifikasi, akun Anda akan <strong>diverifikasi oleh Admin</strong> sebelum dapat digunakan untuk masuk.
+                    </p>
+
+                    <motion.button
+                      type="button"
+                      whileHover={{ scale: 1.01 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => {
+                        setMode('login');
+                        setErrorMessage('');
+                      }}
+                      className="auth-submit-btn"
+                    >
+                      Kembali ke Halaman Masuk
+                    </motion.button>
+                  </motion.div>
+                ) : mode === 'update_password' ? (
+                  /* ====== UPDATE PASSWORD FORM ====== */
+                  <motion.div
+                    key="update-password"
+                    initial={{ opacity: 0, x: 26, filter: 'blur(3px)' }}
+                    animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
+                    exit={{ opacity: 0, x: -26, filter: 'blur(3px)' }}
+                    transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
+                  >
+                    <div className="auth-mode-badge">
+                      <Key size={14} weight="bold" />
+                      <span>Kata Sandi Baru</span>
+                    </div>
+                    <h1 className="auth-heading">Atur Ulang Kata Sandi</h1>
+                    <p className="auth-subheading">
+                      Masukkan kata sandi baru untuk akun Anda.
+                    </p>
+
+                    {errorMessage && (
+                      <div style={{ 
+                        margin: '0.6rem 0', 
+                        padding: '0.55rem 0.75rem', 
+                        background: '#fef2f2', 
+                        border: '1px solid #fecaca', 
+                        borderRadius: '8px', 
+                        fontSize: '0.74rem', 
+                        color: '#991b1b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <WarningCircle size={16} color="#dc2626" weight="bold" />
+                        <span>{errorMessage}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleUpdatePasswordSubmit} className="auth-form-fields">
+                      <div className="auth-field-group">
+                        <label className="auth-label">Kata Sandi Baru</label>
+                        <input 
+                          type="password" 
+                          required 
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Minimal 6 karakter"
+                          className="auth-input" 
+                        />
+                      </div>
+
+                      <div className="auth-field-group">
+                        <label className="auth-label">Konfirmasi Kata Sandi</label>
+                        <input 
+                          type="password" 
+                          required 
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Ulangi kata sandi baru"
+                          className="auth-input" 
+                        />
+                      </div>
+
+                      <motion.button
+                        type="submit"
+                        disabled={isLoading}
+                        whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                        whileTap={{ scale: isLoading ? 1 : 0.98 }}
+                        className="auth-submit-btn"
+                        style={{ marginTop: '0.4rem', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+                      >
+                        {isLoading && <CircleNotch size={18} className="animate-spin" weight="bold" />}
+                        <span>{isLoading ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}</span>
+                      </motion.button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setErrorMessage('');
+                          clearRecoveryPending();
+                          setMode('login');
+                        }}
+                        className="auth-back-to-login-btn"
+                      >
+                        <ArrowLeft size={16} weight="bold" />
+                        <span>Kembali ke Halaman Masuk</span>
+                      </button>
+                    </form>
+                  </motion.div>
                 ) : (
                   /* ====== LOGIN / SIGNUP FORM ====== */
                   <motion.div
@@ -484,7 +1056,7 @@ export default function AuthPage({
                     <div className="auth-role-tabs">
                       <button
                         type="button"
-                        onClick={() => setRole('petani')}
+                        onClick={() => { setRole('petani'); setErrorMessage(''); }}
                         className={`auth-role-tab ${role === 'petani' ? 'active' : ''}`}
                       >
                         <Plant size={17} weight={role === 'petani' ? 'fill' : 'bold'} />
@@ -493,7 +1065,7 @@ export default function AuthPage({
 
                       <button
                         type="button"
-                        onClick={() => setRole('pembeli')}
+                        onClick={() => { setRole('pembeli'); setErrorMessage(''); }}
                         className={`auth-role-tab ${role === 'pembeli' ? 'active' : ''}`}
                       >
                         <BuildingOffice size={17} weight={role === 'pembeli' ? 'fill' : 'bold'} />
@@ -501,10 +1073,94 @@ export default function AuthPage({
                       </button>
                     </div>
 
+                    {/* Quick Demo Credentials Info Box */}
+                    {mode === 'login' && (
+                      <div style={{
+                        margin: '0.65rem 0 0.85rem 0',
+                        padding: '0.55rem 0.85rem',
+                        background: 'rgba(84, 82, 246, 0.05)',
+                        border: '1px dashed rgba(84, 82, 246, 0.3)',
+                        borderRadius: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '8px'
+                      }}>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--accent-primary)', display: 'block' }}>
+                            {role === 'petani' ? '💡 Akun Demo Petani: Hengky Mandagi' : '💡 Akun Demo Pembeli: Hendra Pratama'}
+                          </span>
+                          <span style={{ fontSize: '0.72rem' }}>
+                            {role === 'petani' ? 'petani@agriconnect.id' : 'pembeli@agriconnect.id'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (role === 'petani') {
+                              setEmail('petani@agriconnect.id');
+                              setPassword('petani123');
+                            } else {
+                              setEmail('pembeli@agriconnect.id');
+                              setPassword('pembeli123');
+                            }
+                            setErrorMessage('');
+                          }}
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            padding: '4px 10px',
+                            background: 'var(--accent-primary)',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          Isi Otomatis
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Error Feedback Alert */}
+                    {errorMessage && (
+                      <div style={{ 
+                        margin: '0.6rem 0', 
+                        padding: '0.55rem 0.75rem', 
+                        background: '#fef2f2', 
+                        border: '1px solid #fecaca', 
+                        borderRadius: '8px', 
+                        fontSize: '0.74rem', 
+                        color: '#991b1b',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <WarningCircle size={16} color="#dc2626" weight="bold" />
+                        <span>{errorMessage}</span>
+                      </div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="auth-form-fields">
+                      {/* Full Name Field (Only on Sign Up) */}
+                      {mode === 'signup' && (
+                        <div className="auth-field-group">
+                          <label className="auth-label">Nama Lengkap</label>
+                          <input 
+                            type="text" 
+                            required 
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            placeholder="Contoh: Hengky Mandagi"
+                            className="auth-input" 
+                          />
+                        </div>
+                      )}
+
                       {/* Username / Email Field matching Reference */}
                       <div className="auth-field-group">
-                        <label className="auth-label">Username</label>
+                        <label className="auth-label">Email</label>
                         <input 
                           type="email" 
                           required 
@@ -562,11 +1218,18 @@ export default function AuthPage({
                       {/* Submit Button matching Reference Purple Pill */}
                       <motion.button
                         type="submit"
-                        whileHover={{ scale: 1.01 }}
-                        whileTap={{ scale: 0.98 }}
+                        disabled={isLoading}
+                        whileHover={{ scale: isLoading ? 1 : 1.01 }}
+                        whileTap={{ scale: isLoading ? 1 : 0.98 }}
                         className="auth-submit-btn"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                       >
-                        {mode === 'login' ? 'Login' : 'Sign Up'}
+                        {isLoading && (
+                          <CircleNotch size={18} className="animate-spin" weight="bold" />
+                        )}
+                        <span>
+                          {isLoading ? 'Memproses...' : (mode === 'login' ? 'Login' : 'Sign Up')}
+                        </span>
                       </motion.button>
                     </form>
 

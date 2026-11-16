@@ -9,8 +9,8 @@ export default function PortalAccessSection({
   return (
     <section 
       id="portal-akses"
+      className="portal-section-root"
       style={{
-        padding: '5rem 0 4rem 0',
         backgroundColor: 'var(--bg-canvas-subtle)',
         borderTop: '1px solid var(--border-subtle)',
         transition: 'background-color 0.3s ease, border-color 0.3s ease'
@@ -18,7 +18,7 @@ export default function PortalAccessSection({
     >
       <div className="container">
         {/* Section Header */}
-        <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
+        <div className="portal-header-wrap" style={{ textAlign: 'center', marginBottom: '3rem' }}>
           <span style={{
             fontSize: '0.76rem',
             fontWeight: 750,
@@ -34,18 +34,11 @@ export default function PortalAccessSection({
           }}>
             Akses Langsung Dashboard
           </span>
-          <h2 style={{ 
-            fontSize: 'clamp(1.6rem, 3vw, 2.2rem)', 
-            fontWeight: 800, 
-            color: 'var(--text-primary)', 
-            margin: '0 0 0.6rem 0',
-            letterSpacing: '-0.025em'
-          }}>
+          <h2 className="portal-heading">
             Pilih Portal Sesuai Peran Anda
           </h2>
-          <p style={{ 
+          <p className="portal-subtext" style={{ 
             color: 'var(--text-secondary)', 
-            fontSize: '0.95rem', 
             maxWidth: '580px', 
             margin: '0 auto',
             lineHeight: 1.6
@@ -55,16 +48,11 @@ export default function PortalAccessSection({
         </div>
 
         {/* Portal Cards Grid (3 Columns: Petani, Pembeli, Admin) */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(290px, 1fr))',
-          gap: '1.5rem',
-          maxWidth: '1180px',
-          margin: '0 auto'
-        }}>
+        <div className="portal-cards-grid">
           {/* Card 1: Portal Petani */}
           <div 
             onClick={onOpenFarmerDashboard}
+            className="portal-access-card"
             style={{
               background: 'var(--card-bg, #ffffff)',
               border: '1.5px solid rgba(16, 185, 129, 0.3)',
@@ -175,6 +163,7 @@ export default function PortalAccessSection({
           {/* Card 2: Portal Pembeli */}
           <div 
             onClick={onOpenBuyerDashboard}
+            className="portal-access-card"
             style={{
               background: 'var(--card-bg, #ffffff)',
               border: '1.5px solid rgba(84, 82, 246, 0.3)',
@@ -285,6 +274,7 @@ export default function PortalAccessSection({
           {/* Card 3: Portal Admin (Seragam dengan Card 1 & 2) */}
           <div 
             onClick={onOpenAdminDashboard}
+            className="portal-access-card"
             style={{
               background: 'var(--card-bg, #ffffff)',
               border: '1.5px solid rgba(84, 82, 246, 0.3)',

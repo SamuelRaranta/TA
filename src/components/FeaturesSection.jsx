@@ -36,9 +36,9 @@ const FEATURES_DATA = [
   },
   {
     icon: Lightning,
-    title: 'Digital Binding Agreement',
-    desc: 'Sistem otomatis mengunci kesepakatan tertulis digital untuk mencegah pembatalan sepihak dan melindungi kedua belah pihak.',
-    linkText: 'Cara kerja binding'
+    title: 'Penerbitan Pesanan Digital',
+    desc: 'Sistem otomatis menerbitkan rincian pesanan dan invoice digital resmi untuk mencatat kuantitas, harga, dan jadwal kirim secara transparan.',
+    linkText: 'Pelajari pesanan'
   },
   {
     icon: PuzzlePiece,
@@ -50,7 +50,7 @@ const FEATURES_DATA = [
 
 export default function FeaturesSection({ onOpenSimulation }) {
   return (
-    <section id="keunggulan" style={{ padding: '5.5rem 0', backgroundColor: 'var(--bg-canvas)', position: 'relative', transition: 'background-color 0.3s ease' }}>
+    <section id="keunggulan" className="features-section-root" style={{ position: 'relative', transition: 'background-color 0.3s ease' }}>
       
       {/* Subtle connecting grid pattern */}
       <div style={{
@@ -64,37 +64,27 @@ export default function FeaturesSection({ onOpenSimulation }) {
 
       <div className="container" style={{ position: 'relative', zIndex: 1 }}>
         {/* Section Header */}
-        <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 3.5rem auto' }}>
+        <div className="features-header-wrap" style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 3.5rem auto' }}>
           <div style={{ marginBottom: '1rem' }}>
             <span className="pill-badge" style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               FEATURES
             </span>
           </div>
 
-          <h2 style={{
-            fontSize: 'clamp(2rem, 3.2vw, 2.75rem)',
-            fontWeight: 800,
-            color: 'var(--text-primary)',
-            marginBottom: '0.85rem',
-            letterSpacing: '-0.035em'
-          }}>
+          <h2 className="features-heading">
             Everything You Need to{' '}
             <span style={{ color: 'var(--accent-primary)' }}>
               Succeed
             </span>
           </h2>
 
-          <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          <p className="features-subtext">
             Fitur tangguh yang dibangun khusus untuk memperlancar rantai pasok komoditas pertanian dan memberikan hasil nyata.
           </p>
         </div>
 
         {/* 6 Cards in 3x2 Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '1.75rem'
-        }} className="features-grid-3x2">
+        <div className="features-grid-3x2">
           {FEATURES_DATA.map((item, idx) => {
             const Icon = item.icon;
             return (
