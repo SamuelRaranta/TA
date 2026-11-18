@@ -341,35 +341,65 @@ export default function FarmerProducts({
     <div className="farmer-products-view" style={{ maxWidth: '1280px', margin: '0 auto' }}>
       
       {/* ================= 1. HEADER ================= */}
-      <div className="farmer-section-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div>
-          <h1 className="farmer-page-title" style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800 }}>
+      <div className="farmer-section-header" style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.65rem' }}>
+        <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <h1 className="farmer-page-title" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary, #1e293b)', letterSpacing: '-0.02em', margin: 0 }}>
             Komoditas Saya
           </h1>
-          <p className="farmer-page-sub" style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-            Kelola daftar komoditas dan hasil panen yang Anda publikasikan ke pembeli.
-          </p>
+
+          <button
+            type="button"
+            onClick={handleOpenCreateModal}
+            className="clone-btn-primary"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '0.55rem 1.15rem',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(84, 82, 246, 0.25)'
+            }}
+            title="Tambah produk komoditas panen baru"
+          >
+            <Plus size={16} weight="bold" />
+            <span>Tambah Komoditas</span>
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={handleOpenCreateModal}
-          className="clone-btn-primary"
-          style={{
-            display: 'inline-flex',
+        {/* Kotak Card Subtitle (Bottom Card di bawah judul) */}
+        <div style={{
+          width: '100%',
+          maxWidth: '960px',
+          background: 'var(--bg-surface-card, #ffffff)',
+          border: '1px solid var(--border-subtle, #e2e8f0)',
+          borderRadius: '12px',
+          padding: '0.85rem 1.15rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '0.75rem',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '7px',
+            background: 'rgba(84, 82, 246, 0.08)',
+            color: '#5452f6',
+            display: 'flex',
             alignItems: 'center',
-            gap: '6px',
-            padding: '0.55rem 1.15rem',
-            fontSize: '0.85rem',
-            fontWeight: 700,
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(84, 82, 246, 0.25)'
-          }}
-          title="Tambah produk komoditas panen baru"
-        >
-          <Plus size={16} weight="bold" />
-          <span>Tambah Komoditas</span>
-        </button>
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: '2px'
+          }}>
+            <Info size={16} weight="bold" />
+          </div>
+          <p className="farmer-page-sub" style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary, #64748b)', lineHeight: 1.6, flex: 1 }}>
+            Kelola seluruh komoditas dan hasil panen kelompok tani Anda. Pantau ketersediaan stok tonase, perbarui harga jual per kg, tinjau status verifikasi kurasi, dan publikasikan komoditas siap panen secara langsung ke jaringan pembeli grosir.
+          </p>
+        </div>
       </div>
 
       {/* ================= 2. 4 SUMMARY CARDS (DESAIN SEPERTI GAMBAR 3) ================= */}

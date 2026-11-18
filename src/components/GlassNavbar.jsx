@@ -158,10 +158,10 @@ export default function GlassNavbar({
               Masuk
             </button>
 
-            {/* Primary Pill Button */}
+            {/* Primary Pill Button (Disembunyikan di bar atas mobile agar tidak berdempetan, tersedia di menu drawer mobile) */}
             <button
               onClick={onOpenSignup}
-              className="btn btn-primary"
+              className="btn btn-primary desktop-nav"
               style={{
                 padding: '0.65rem 1.35rem',
                 minHeight: '44px',
@@ -334,6 +334,21 @@ export default function GlassNavbar({
         @media (max-width: 890px) {
           .desktop-nav { display: none !important; }
           .mobile-toggle { display: flex !important; }
+        }
+        @media (max-width: 640px) {
+          header nav {
+            height: 60px !important;
+          }
+          .theme-toggle-btn {
+            width: 38px !important;
+            height: 38px !important;
+            padding: 7px !important;
+          }
+          .mobile-toggle {
+            width: 38px !important;
+            height: 38px !important;
+            padding: 7px !important;
+          }
         }
       `}</style>
     </header>

@@ -88,9 +88,13 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // 3. Swipe to Refresh
-        swipeRefresh.setColorSchemeColors(0xFF2563EB, 0xFF5452F6);
-        swipeRefresh.setOnRefreshListener(() -> webView.reload());
+        // 3. Swipe to Refresh (Dinonaktifkan agar scroll atas-bawah WebView 100% mulus tanpa interupsi gesture)
+        swipeRefresh.setEnabled(false);
+
+        // Pastikan WebView merespons scroll dengan sangat mulus dan native
+        webView.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+        webView.setVerticalScrollBarEnabled(true);
+        webView.setHorizontalScrollBarEnabled(false);
 
         // 4. WebViewClient
         webView.setWebViewClient(new WebViewClient() {

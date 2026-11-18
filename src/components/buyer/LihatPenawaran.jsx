@@ -375,10 +375,40 @@ export default function BuyerOffers({
     <div className="farmer-products-view">
       
       {/* ================= HEADER BAR ================= */}
-      <div className="farmer-section-header" style={{ marginBottom: '1.25rem' }}>
-        <div>
-          <h1 className="farmer-page-title">{title}</h1>
-          <p className="farmer-page-sub">
+      <div className="farmer-section-header" style={{ marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+        <h1 className="farmer-page-title" style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary, #1e293b)', letterSpacing: '-0.02em', margin: '0 0 0.65rem 0' }}>
+          {title}
+        </h1>
+        
+        {/* Kotak Card Subtitle (Bottom Card di bawah judul) */}
+        <div style={{
+          width: '100%',
+          maxWidth: '960px',
+          background: 'var(--bg-surface-card, #ffffff)',
+          border: '1px solid var(--border-subtle, #e2e8f0)',
+          borderRadius: '12px',
+          padding: '0.85rem 1.15rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '0.75rem',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '7px',
+            background: 'rgba(84, 82, 246, 0.08)',
+            color: '#5452f6',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: '2px'
+          }}>
+            <Info size={16} weight="bold" />
+          </div>
+          <p className="farmer-page-sub" style={{ margin: 0, fontSize: '0.84rem', color: 'var(--text-secondary, #64748b)', lineHeight: 1.6, flex: 1 }}>
             {subtitle}
           </p>
         </div>

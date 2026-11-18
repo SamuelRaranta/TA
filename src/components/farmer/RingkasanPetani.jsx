@@ -136,7 +136,7 @@ export default function FarmerCloneOverview({
       <div className="clone-dash-header">
         <div>
           <h1 className="clone-dash-title clone-greeting-title">
-            <span className="clone-greeting-blue">{greeting}</span>, {isLoadingProfile && !farmerProfile?.name ? (
+            <span className="clone-greeting-blue">{greeting},</span> {isLoadingProfile && !farmerProfile?.name ? (
               <span className="agri-skeleton-pulse" style={{ height: '24px', width: '100px', verticalAlign: 'middle', margin: '0 4px', borderRadius: '6px' }} />
             ) : (
               `${displayName}!`
@@ -305,7 +305,8 @@ export default function FarmerCloneOverview({
                 className="clone-spline-tooltip"
                 style={{
                   left: `${(activePoint.x / chartWidth) * 100}%`,
-                  top: `${Math.max(12, activePoint.y - 12)}px`
+                  top: `${Math.max(12, activePoint.y - 12)}px`,
+                  transform: hoveredMonthIndex >= 4 ? 'translateX(-85%)' : (hoveredMonthIndex <= 1 ? 'translateX(-15%)' : 'translateX(-50%)')
                 }}
               >
                 <div className="clone-spline-tooltip-date">{months6Data[hoveredMonthIndex].date}</div>

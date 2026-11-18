@@ -285,7 +285,7 @@ export default function AdminCloneOverview({ onNavigate, marketPrices: initialPr
       <div className="clone-dash-header">
         <div>
           <h1 className="clone-dash-title clone-greeting-title">
-            <span className="clone-greeting-blue">{greeting}</span>, Tim Admin! 👋
+            <span className="clone-greeting-blue">{greeting},</span> Tim Admin! 👋
           </h1>
           <p className="clone-dash-subtitle">
             Ringkasan pengawasan operasional, aktivitas waktu nyata platform, dan moderasi komoditas hasil panen.
@@ -476,7 +476,14 @@ export default function AdminCloneOverview({ onNavigate, marketPrices: initialPr
                     >
                       {/* Floating Tooltip */}
                       {isHovered && (
-                        <div className="clone-barchart-tooltip">
+                        <div 
+                          className="clone-barchart-tooltip"
+                          style={{
+                            left: idx >= 5 ? 'auto' : (idx === 0 ? '0' : '50%'),
+                            right: idx >= 5 ? '0' : 'auto',
+                            transform: idx >= 5 || idx === 0 ? 'none' : 'translateX(-50%)'
+                          }}
+                        >
                           +{item.users} ({item.farmers} Petani, {item.buyers} Pembeli)
                         </div>
                       )}

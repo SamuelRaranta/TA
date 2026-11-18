@@ -1409,6 +1409,8 @@ export default function BuyerDashboard({
             <LihatPenawaran 
               offers={offers}
               isLoading={isLoadingData}
+              title="Lihat Penawaran"
+              subtitle="Pantau status seluruh proposal penawaran harga dan tonase yang Anda ajukan ke kelompok tani produsen. Terima kesepakatan, tolak penawaran balik, atau lakukan negosiasi harga ulang secara langsung."
               onAcceptCounterOffer={handleAcceptCounterOffer}
               onSubmitBuyerCounter={handleSubmitBuyerCounter}
               onProceedToBinding={() => setActiveTab('pembayaran')}

@@ -321,7 +321,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
+                      <div className="hero-tablet-search-box" style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
@@ -344,10 +344,8 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
                     </div>
                   </div>
 
-                  {/* 4 Stat Cards Row */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(4, 1fr)',
+                  {/* 4 Stat Cards Row (Responsive 2x2 pada Mobile) */}
+                  <div className="hero-tablet-stats-grid" style={{
                     gap: '0.5rem',
                     marginBottom: '1rem'
                   }}>

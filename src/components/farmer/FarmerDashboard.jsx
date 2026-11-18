@@ -1479,7 +1479,7 @@ export default function FarmerDashboard({
               isFarmerView={true}
               isLoading={isLoadingData}
               title="Lihat Komoditas"
-              subtitle="Jelajahi seluruh komoditas hasil panen yang terdaftar di pasar grosir."
+              subtitle="Jelajahi seluruh komoditas hasil panen yang terdaftar di pasar grosir Minahasa. Pantau ketersediaan pasokan komoditas pangan dari sesama kelompok tani untuk referensi harga pasar dan estimasi pasokan daerah."
             />
           )}
 
@@ -1490,7 +1490,7 @@ export default function FarmerDashboard({
               isFarmerView={true}
               isLoading={isLoadingData}
               title="Cari Penawaran"
-              subtitle="Telusuri seluruh proposal penawaran komoditas yang diajukan oleh pembeli kepada kelompok tani."
+              subtitle="Telusuri seluruh proposal penawaran kebutuhan komoditas yang diajukan oleh pembeli grosir kepada kelompok tani di Minahasa. Tanggapi tawaran dengan menyetujui, menolak, atau mengajukan negosiasi harga dan tonase alternatif."
               onAcceptCounterOffer={(offerId, offerData) => {
                 setBuyerOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui' } : o));
                 handleAcceptOffer(offerId, offerData);
