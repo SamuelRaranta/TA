@@ -11,6 +11,7 @@ import FarmerDashboard from './components/farmer/FarmerDashboard';
 import BuyerDashboard from './components/buyer/BuyerDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import { supabase } from './lib/supabaseClient';
+import { notifyNewUserRegistered } from './lib/notificationService';
 
 // Cache sesi dibersihkan total (generik + per-role) agar tidak ada identitas basi lintas peran.
 const clearAllAuthCache = () => {
@@ -112,17 +113,19 @@ function AppContent() {
     }
   };
   const isRecoveryUrl = (hash, search) => {
+    // Jangan anggap sebagai pemulihan kata sandi jika ini adalah alur OAuth
+    if (localStorage.getItem('agriconnect_oauth_in_progress') || hash.includes('provider_token=') || hash.includes('provider_refresh_token=')) {
+      return false;
+    }
     return (
       hash.includes('type=recovery') ||
-      hash.includes('access_token=') ||
-      hash.includes('token_hash=') ||
       search.includes('type=recovery') ||
+      hash.includes('token_hash=') ||
       search.includes('token_hash=') ||
-      search.includes('code=') ||
-      hash.includes('code=') ||
       hash.startsWith('#/auth') ||
       hash.startsWith('#/reset-password') ||
-      hash.startsWith('#/update-password')
+      hash.startsWith('#/update-password') ||
+      (isRecoveryPending() && (search.includes('code=') || hash.includes('code=') || hash.includes('access_token=')))
     );
   };
 
@@ -359,6 +362,41 @@ function AppContent() {
         return;
       }
 
+      // Auto-provision profil untuk pengguna OAuth baru jika belum ada di database
+      if (!profile) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user && user.id === userId) {
+            const oauthRole = localStorage.getItem('agriconnect_oauth_role') || requestedRole || 'petani';
+            const resolvedName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Pengguna Baru';
+            const defaultAvatar = oauthRole === 'pembeli'
+              ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80'
+              : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&auto=format&fit=crop&q=80';
+            const avatarUrl = user.user_metadata?.avatar_url || user.user_metadata?.picture || defaultAvatar;
+
+            const newProf = {
+              id: user.id,
+              role: oauthRole,
+              full_name: resolvedName,
+              email: user.email,
+              phone: '0812-4321-8765',
+              location: 'Minahasa, Sulawesi Utara',
+              avatar_url: avatarUrl,
+              kyc_status: 'verified'
+            };
+            const { error: insErr } = await supabase.from('profiles').upsert(newProf);
+            if (!insErr) {
+              profile = { role: oauthRole, kyc_status: 'verified' };
+              try {
+                await notifyNewUserRegistered({ userId: user.id, userRole: oauthRole });
+              } catch (e) {}
+            }
+          }
+        } catch (e) {
+          console.warn('Auto-provision OAuth profile notice:', e);
+        }
+      }
+
       if (!profile || !['petani', 'pembeli', 'admin'].includes(profile.role)) {
         await denyAccess(true);
         return;
@@ -395,26 +433,77 @@ function AppContent() {
     return () => { cancelled = true; };
   }, [currentView, authVersion]);
 
-  // Sync Supabase Auth state with local storage.
-  // TOKEN_REFRESHED sengaja TIDAK memicu verifikasi ulang (itu penyebab flicker tiap refresh/fokus tab).
+  // Sync Supabase Auth state with local storage & auto-handle OAuth callbacks.
   useEffect(() => {
+    const processUserSession = async (session) => {
+      if (!session?.user) return;
+      try {
+        const isOAuthInProgress = Boolean(
+          localStorage.getItem('agriconnect_oauth_in_progress') ||
+          session.user.app_metadata?.provider !== 'email'
+        );
+
+        let { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        const savedRole = localStorage.getItem('agriconnect_oauth_role');
+        const role = profile?.role || savedRole || session.user.user_metadata?.role || 'petani';
+        const name = profile?.full_name || session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Pengguna Baru';
+
+        if (!profile) {
+          const defaultAvatar = role === 'pembeli'
+            ? 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80'
+            : 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=160&auto=format&fit=crop&q=80';
+          const avatarUrl = session.user.user_metadata?.avatar_url || session.user.user_metadata?.picture || defaultAvatar;
+
+          await supabase.from('profiles').upsert({
+            id: session.user.id,
+            role: role,
+            full_name: name,
+            email: session.user.email,
+            phone: '0812-4321-8765',
+            location: 'Minahasa, Sulawesi Utara',
+            avatar_url: avatarUrl,
+            kyc_status: 'verified'
+          });
+
+          try {
+            await notifyNewUserRegistered({ userId: session.user.id, userRole: role });
+          } catch (e) {}
+        } else if (profile.kyc_status === 'pending' && isOAuthInProgress) {
+          await supabase.from('profiles').update({ kyc_status: 'verified' }).eq('id', session.user.id);
+        }
+
+        const payload = {
+          id: session.user.id,
+          email: session.user.email,
+          role: role,
+          fullName: name,
+          name: name
+        };
+        localStorage.setItem('agriconnect_auth_user', JSON.stringify(payload));
+        localStorage.setItem(`agriconnect_auth_user_${role}`, JSON.stringify(payload));
+
+        if (isOAuthInProgress) {
+          localStorage.removeItem('agriconnect_oauth_in_progress');
+          localStorage.removeItem('agriconnect_oauth_role');
+          const targetView = role === 'admin' ? 'admin-dashboard' : role === 'pembeli' ? 'buyer-dashboard' : 'farmer-dashboard';
+          const targetHash = role === 'admin' ? '#/dashboard/admin' : role === 'pembeli' ? '#/dashboard/pembeli' : '#/dashboard/petani';
+          setDashboardAccess({ view: targetView, status: 'verified' });
+          setCurrentView(targetView);
+          window.location.hash = targetHash;
+        }
+      } catch (err) {
+        console.warn('OAuth session processing warning:', err);
+      }
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        try {
-          const stored = localStorage.getItem('agriconnect_auth_user');
-          const parsed = stored ? JSON.parse(stored) : null;
-          if (!parsed || parsed.id !== session.user.id) {
-            const metaName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || '';
-            const metaRole = session.user.user_metadata?.role;
-            localStorage.setItem('agriconnect_auth_user', JSON.stringify({
-              id: session.user.id,
-              email: session.user.email,
-              role: metaRole || parsed?.role,
-              fullName: metaName || parsed?.fullName,
-              name: metaName || parsed?.name
-            }));
-          }
-        } catch (e) {}
+        processUserSession(session);
       }
     }).catch(err => {
       console.warn('Session check warning:', err);
@@ -423,8 +512,14 @@ function AppContent() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
         setCurrentView('login');
-      }
-      if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_IN') {
+        if (session?.user) {
+          processUserSession(session);
+        }
+        if (!lastVerifiedUserRef.current || lastVerifiedUserRef.current.userId !== session?.user?.id) {
+          setAuthVersion(version => version + 1);
+        }
+      } else if (event === 'SIGNED_OUT') {
         clearAllAuthCache();
         lastVerifiedUserRef.current = null;
         setDashboardAccess({ view: null, status: 'idle' });
@@ -438,11 +533,6 @@ function AppContent() {
         if (v === 'farmer-dashboard' || v === 'buyer-dashboard' || v === 'admin-dashboard') {
           setCurrentView('login');
           window.location.hash = '#/login';
-        }
-      } else if (event === 'SIGNED_IN') {
-        // Hanya verifikasi ulang jika user-nya benar-benar berganti.
-        if (!lastVerifiedUserRef.current || lastVerifiedUserRef.current.userId !== session?.user?.id) {
-          setAuthVersion(version => version + 1);
         }
       } else if (event === 'USER_UPDATED') {
         setAuthVersion(version => version + 1);

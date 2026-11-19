@@ -131,26 +131,58 @@ export default function AuthPage({
     const bootRecovery = async () => {
       const pending = isRecoveryPending();
       const params = extractAuthParamsFromUrl();
+      const isOAuthReturn = Boolean(
+        localStorage.getItem('agriconnect_oauth_in_progress') ||
+        params.type === 'bearer' ||
+        window.location.hash.includes('provider_token=') ||
+        window.location.hash.includes('provider_refresh_token=')
+      );
+
+      // Jangan jalankan alur pemulihan jika ini adalah OAuth return
+      if (isOAuthReturn && !pending && params.type !== 'recovery') {
+        clearRecoveryPending();
+        return;
+      }
+
       const hasParams = Boolean(
         params.code ||
         (params.access_token && params.refresh_token) ||
         params.token_hash
       );
 
-      // 1. Sesi sudah ada (mis. client init otomatis dari URL) -> langsung form.
+      // 1. Sesi sudah ada (mis. client init otomatis dari URL) -> langsung form jika recovery.
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (cancelled) return;
         if (session) {
           if (pending || params.type === 'recovery') {
             setMode('update_password');
+            return;
+          }
+          // Jika mendarat dengan sesi OAuth aktif
+          if (isOAuthReturn || session.user?.app_metadata?.provider !== 'email') {
+            const chosenRole = localStorage.getItem('agriconnect_oauth_role') || role || 'petani';
+            setIsSuccess(true);
+            setTimeout(() => {
+              if (chosenRole === 'admin') {
+                if (onNavigateToAdminDashboard) onNavigateToAdminDashboard();
+                else window.location.hash = '#/dashboard/admin';
+              } else if (chosenRole === 'pembeli') {
+                if (onNavigateToBuyerDashboard) onNavigateToBuyerDashboard();
+                else window.location.hash = '#/dashboard/pembeli';
+              } else {
+                if (onNavigateToDashboard) onNavigateToDashboard();
+                else window.location.hash = '#/dashboard/petani';
+              }
+            }, 600);
+            return;
           }
           return;
         }
       } catch (e) {}
 
-      // 2. Tukar parameter URL menjadi sesi pemulihan.
-      if (hasParams) {
+      // 2. Tukar parameter URL menjadi sesi pemulihan (hanya jika ada indikator recovery).
+      if (hasParams && (pending || params.type === 'recovery')) {
         try {
           if (params.code) {
             const { data, error } = await supabase.auth.exchangeCodeForSession(params.code);
@@ -193,7 +225,7 @@ export default function AuthPage({
       }
 
       // 3. Flag ada tapi tanpa sesi/parameter: arahkan minta tautan baru.
-      if (pending && !cancelled) {
+      if (pending && !cancelled && params.type === 'recovery') {
         setMode('update_password');
         setErrorMessage('Sesi pemulihan tidak ditemukan. Silakan minta tautan baru lewat Lupa Kata Sandi.');
       }
@@ -212,6 +244,62 @@ export default function AuthPage({
       authListener?.subscription?.unsubscribe();
     };
   }, [initialMode, initialRole]);
+
+  const handleSocialAuth = async (provider) => {
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      // Catat peran yang dipilih (petani / pembeli)
+      localStorage.setItem('agriconnect_oauth_role', role);
+      localStorage.setItem('agriconnect_oauth_in_progress', provider);
+
+      const redirectUrl = `${window.location.origin}/`;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://xvazeoftqsmyysfmhdiq.supabase.co';
+
+      // Uji apakah provider sudah diaktifkan di dashboard Supabase
+      try {
+        const testRes = await fetch(`${supabaseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(redirectUrl)}`, {
+          method: 'GET'
+        });
+        if (testRes.status === 400) {
+          const errJson = await testRes.json().catch(() => ({}));
+          if (errJson?.msg?.includes('not enabled') || errJson?.error_code === 'validation_failed') {
+            const providerName = provider === 'google' ? 'Google' : provider === 'facebook' ? 'Facebook' : 'LinkedIn';
+            setErrorMessage(`Login & Daftar via ${providerName} belum diaktifkan di Dashboard Supabase. Silakan aktifkan provider "${providerName}" di Supabase Console > Authentication > Providers atau masuk menggunakan Email & Password.`);
+            localStorage.removeItem('agriconnect_oauth_in_progress');
+            setIsLoading(false);
+            return;
+          }
+        }
+      } catch (preCheckErr) {
+        console.warn('OAuth pre-check notice:', preCheckErr);
+      }
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: provider,
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent'
+          }
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error(`OAuth error [${provider}]:`, err);
+      setErrorMessage(err.message || `Gagal memulai autentikasi dengan ${provider}.`);
+      localStorage.removeItem('agriconnect_oauth_in_progress');
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1235,14 +1323,19 @@ export default function AuthPage({
 
                     {/* Social Login Footer matching Reference */}
                     <div className="auth-social-footer">
-                      <span className="auth-social-label">Login with</span>
+                      <span className="auth-social-label">
+                        {mode === 'login' ? 'Login with' : 'Daftar dengan'}
+                      </span>
                       <div className="auth-social-icons">
                         {/* Facebook */}
                         <button 
                           type="button" 
-                          onClick={() => alert('Simulasi Login via Facebook')} 
+                          onClick={() => handleSocialAuth('facebook')} 
+                          disabled={isLoading}
                           className="auth-social-btn facebook"
-                          aria-label="Login with Facebook"
+                          aria-label={mode === 'login' ? 'Login with Facebook' : 'Daftar dengan Facebook'}
+                          title="Facebook"
+                          style={{ opacity: isLoading ? 0.6 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877f2">
                             <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
@@ -1252,9 +1345,12 @@ export default function AuthPage({
                         {/* LinkedIn */}
                         <button 
                           type="button" 
-                          onClick={() => alert('Simulasi Login via LinkedIn')} 
+                          onClick={() => handleSocialAuth('linkedin_oidc')} 
+                          disabled={isLoading}
                           className="auth-social-btn linkedin"
-                          aria-label="Login with LinkedIn"
+                          aria-label={mode === 'login' ? 'Login with LinkedIn' : 'Daftar dengan LinkedIn'}
+                          title="LinkedIn"
+                          style={{ opacity: isLoading ? 0.6 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="#0077b5">
                             <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
@@ -1264,9 +1360,12 @@ export default function AuthPage({
                         {/* Google */}
                         <button 
                           type="button" 
-                          onClick={() => alert('Simulasi Login via Google')} 
+                          onClick={() => handleSocialAuth('google')} 
+                          disabled={isLoading}
                           className="auth-social-btn google"
-                          aria-label="Login with Google"
+                          aria-label={mode === 'login' ? 'Login with Google' : 'Daftar dengan Google'}
+                          title="Google"
+                          style={{ opacity: isLoading ? 0.6 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24">
                             <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>

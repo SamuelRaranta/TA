@@ -9,13 +9,22 @@ import './index.css'
 // Lihat: GoTrueClient._getSessionFromURL -> window.location.hash = ''.
 try {
   const href = window.location.href || '';
-  const hasRecoveryMarker =
-    href.includes('type=recovery') ||
-    href.includes('access_token=') ||
-    href.includes('token_hash=') ||
-    /[?&]code=/.test(href);
-  if (hasRecoveryMarker) {
-    sessionStorage.setItem('agriconnect_recovery_pending', '1');
+  const isOAuth = Boolean(
+    localStorage.getItem('agriconnect_oauth_in_progress') ||
+    href.includes('provider_token=') ||
+    href.includes('provider_refresh_token=')
+  );
+
+  if (isOAuth) {
+    sessionStorage.removeItem('agriconnect_recovery_pending');
+  } else {
+    const hasRecoveryMarker =
+      href.includes('type=recovery') ||
+      href.includes('token_hash=') ||
+      (sessionStorage.getItem('agriconnect_recovery_pending') === '1');
+    if (hasRecoveryMarker) {
+      sessionStorage.setItem('agriconnect_recovery_pending', '1');
+    }
   }
 } catch (e) {}
 
