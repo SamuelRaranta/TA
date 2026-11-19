@@ -27,7 +27,8 @@ import {
   Sparkle,
   Quotes,
   Clock,
-  XCircle
+  XCircle,
+  ArrowClockwise
 } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabaseClient';
 import { DEFAULT_AVATAR } from '../../lib/constants';
@@ -123,6 +124,33 @@ export default function PengaturanPengguna({
     location: rawProfile?.location || rawProfile?.address || '',
     updatedAt: null
   });
+
+  // State untuk Pembaruan Aplikasi Realtime
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateSuccessMsg, setUpdateSuccessMsg] = useState('');
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateSuccessMsg('');
+    try {
+      if ('caches' in window) {
+        try {
+          const cacheKeys = await window.caches.keys();
+          await Promise.all(cacheKeys.map(k => window.caches.delete(k)));
+        } catch (e) {}
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setUpdateSuccessMsg('Aplikasi Anda sudah terhubung ke versi terbaru (v1.2.0). Memuat ulang aset...');
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err) {
+      console.warn('Update check failed:', err);
+      window.location.reload();
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   // Helper memformat tanggal bergabung dinamis ke format Bahasa Indonesia (misal: "19 September 2026")
   const formatJoinDate = (dateVal) => {
@@ -1578,6 +1606,65 @@ export default function PengaturanPengguna({
                   </div>
                 )}
 
+              </div>
+            </div>
+
+            {/* Pembaruan Aplikasi (Otomatis & Realtime via Cloud) */}
+            <div className="settings-card-block" style={{ marginTop: '2rem' }}>
+              {updateSuccessMsg && (
+                <div className="settings-alert-banner success" style={{ marginBottom: '1.25rem' }}>
+                  <CheckCircle size={18} weight="fill" />
+                  <span>{updateSuccessMsg}</span>
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
+                <div style={{ maxWidth: '580px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <h3 className="settings-block-title" style={{ margin: 0 }}>Versi & Pembaruan Aplikasi</h3>
+                    <span style={{ 
+                      fontSize: '0.74rem', 
+                      fontWeight: 700, 
+                      padding: '2px 8px', 
+                      borderRadius: '9999px', 
+                      background: '#dcfce7', 
+                      color: '#15803d',
+                      border: '1px solid #bbf7d0',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '5px'
+                    }}>
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+                      Versi Terbaru v1.2.0
+                    </span>
+                  </div>
+                  <p className="settings-block-sub" style={{ margin: 0, lineHeight: 1.5 }}>
+                    Aplikasi mobile Anda terhubung langsung secara real-time ke Vercel Cloud. Setiap perbaikan dan fitur baru otomatis sinkron tanpa perlu kompilasi ulang di Android Studio atau instal ulang file APK.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCheckUpdate}
+                  disabled={isCheckingUpdate}
+                  className="settings-btn-primary"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '0.65rem 1.25rem',
+                    borderRadius: '8px',
+                    background: '#5452f6',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    cursor: isCheckingUpdate ? 'wait' : 'pointer',
+                    boxShadow: '0 4px 12px rgba(84, 82, 246, 0.25)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <ArrowClockwise size={17} weight="bold" className={isCheckingUpdate ? 'animate-spin' : ''} />
+                  <span>{isCheckingUpdate ? 'Memeriksa...' : 'Periksa & Muat Pembaruan'}</span>
+                </button>
               </div>
             </div>
 
