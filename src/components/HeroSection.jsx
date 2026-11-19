@@ -375,9 +375,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
                   </div>
 
                   {/* Middle Area: Revenue Curve Chart + Live Tonnage Slider */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.4fr 1fr',
+                  <div className="hero-tablet-mid-grid" style={{
                     gap: '0.75rem',
                     marginBottom: '1rem'
                   }}>

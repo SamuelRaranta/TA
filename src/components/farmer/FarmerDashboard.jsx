@@ -78,6 +78,7 @@ import LihatPenawaran from '../buyer/LihatPenawaran';
 import LaporkanMasalah from '../common/LaporkanMasalah';
 import NotificationDropdown from '../common/NotificationDropdown';
 import NotificationPage from '../common/NotificationPage';
+import AppDownloadPromoCard from '../common/AppDownloadPromoCard';
 import { useNotifications } from '../../lib/useNotifications';
 import { 
   notifyOfferAccepted, 
@@ -1205,23 +1206,8 @@ export default function FarmerDashboard({
 
         </div>
 
-        {/* Bottom Promo Card: "Download our Mobile app" with Sky Blue & Web Logo */}
-        {/* Dynamic size: Compact saat dropdown komoditas terbuka/ditekan, Spacious saat dropdown komoditas tertutup */}
-        <div className={`clone-sidebar-promo-card sky-blue-card ${komoditasDropdownOpen ? 'compact' : 'spacious'}`}>
-          <div className="clone-promo-sky-glow" />
-          <div className="clone-promo-icon-badge sky-badge" title="AgriConnect Mobile App">
-            <Plant size={komoditasDropdownOpen ? 13 : 16} weight="fill" color="#0284c7" />
-          </div>
-          <h4 className="clone-promo-title">Download our<br />Mobile app</h4>
-          <p className="clone-promo-subtitle">Get easy in another way</p>
-          <button 
-            type="button" 
-            className="clone-promo-btn sky-btn"
-            onClick={() => alert('Aplikasi AgriConnect Mobile segera hadir di Google Play Store & App Store!')}
-          >
-            Download
-          </button>
-        </div>
+        {/* Bottom Promo Card: Download APK di Browser / Update Aplikasi di Mobile App */}
+        <AppDownloadPromoCard role="farmer" isCompact={komoditasDropdownOpen} />
 
       </aside>
 

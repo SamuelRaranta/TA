@@ -122,15 +122,22 @@ html {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
+  /* Mencegah native pull-to-refresh mendadak di browser mobile saat scroll ke atas */
+  overscroll-behavior-y: none;
+  -webkit-overscroll-behavior-y: none;
 }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
   position: relative;
   overflow-x: hidden;
   line-height: 1.6;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
+  /* Mencegah overscroll bounce reload */
+  overscroll-behavior-y: none;
+  -webkit-overscroll-behavior-y: none;
 }
 
 button, input, select, textarea, option, optgroup {
@@ -16130,6 +16137,8 @@ p {
     overflow-x: hidden;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-y: none !important;
+    -webkit-overscroll-behavior-y: none !important;
     height: auto !important;
     min-height: 100% !important;
   }
@@ -16138,6 +16147,7 @@ p {
     min-height: 100dvh;
     overflow-x: hidden;
     overflow-y: visible;
+    overscroll-behavior-y: none;
   }
 
   /* Unstick Dashboard scroll trapping: let the document scroll naturally */
@@ -16149,6 +16159,7 @@ p {
     max-height: none !important;
     overflow-y: visible !important;
     overflow-x: hidden !important;
+    overscroll-behavior-y: none !important;
   }
 
   .clone-main-content {
@@ -16158,6 +16169,7 @@ p {
     overflow-y: visible !important;
     overflow-x: hidden !important;
     flex: 1 0 auto !important;
+    overscroll-behavior-y: none !important;
   }
 
   .clone-page-body {
@@ -16326,6 +16338,11 @@ p {
   min-height: 480px;
 }
 
+.hero-tablet-mid-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+}
+
 @media (max-width: 960px) {
   .hero-section-root {
     padding: 2.75rem 0 3.25rem 0 !important;
@@ -16399,6 +16416,10 @@ p {
 
   .tablet-mini-sidebar {
     display: none !important;
+  }
+
+  .hero-tablet-mid-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
@@ -17055,5 +17076,25 @@ p {
   .auth-role-tab {
     padding: 0.45rem 0.5rem !important;
     font-size: 0.8rem !important;
+  }
+}
+
+/* 17. Landing Page Footer Responsive Polish & Mobile Touch Optimization */
+@media (max-width: 960px) {
+  .footer-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.75rem !important;
+  }
+  
+  /* Market price carousel touch navigation polish on mobile */
+  .market-carousel-floating-arrow {
+    display: none !important;
   }
 }

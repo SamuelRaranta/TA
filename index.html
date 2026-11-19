@@ -63,12 +63,10 @@
             })
             .catch((err) => console.warn('[PWA] Gagal mendaftarkan Service Worker:', err));
 
-          let refreshing = false;
+          // Simpan status update secara halus tanpa memaksa reload mendadak saat user sedang aktif scroll
           navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!refreshing) {
-              refreshing = true;
-              window.location.reload();
-            }
+            console.log('[PWA] Kontroler Service Worker diperbarui dengan aman.');
+            window.dispatchEvent(new CustomEvent('agriconnect:sw_updated'));
           });
         });
       }

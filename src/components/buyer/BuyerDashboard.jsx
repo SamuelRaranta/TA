@@ -74,6 +74,7 @@ import AjukanPenawaran from './AjukanPenawaran';
 import LaporkanMasalah from '../common/LaporkanMasalah';
 import NotificationDropdown from '../common/NotificationDropdown';
 import NotificationPage from '../common/NotificationPage';
+import AppDownloadPromoCard from '../common/AppDownloadPromoCard';
 import { useNotifications } from '../../lib/useNotifications';
 
 // Route mapping for Buyer sub-pages
@@ -1131,22 +1132,8 @@ export default function BuyerDashboard({
 
         </div>
 
-        {/* Bottom Promo Card */}
-        <div className={`clone-sidebar-promo-card sky-blue-card ${komoditasDropdownOpen ? 'compact' : 'spacious'}`}>
-          <div className="clone-promo-sky-glow" />
-          <div className="clone-promo-icon-badge sky-badge" title="AgriConnect Procurement App">
-            <Truck size={komoditasDropdownOpen ? 13 : 16} weight="fill" color="#0284c7" />
-          </div>
-          <h4 className="clone-promo-title">Download our<br />Buyer App</h4>
-          <p className="clone-promo-subtitle">Pantau pasokan armada</p>
-          <button 
-            type="button" 
-            className="clone-promo-btn sky-btn"
-            onClick={() => alert('Aplikasi AgriConnect Buyer segera hadir di Google Play Store & App Store!')}
-          >
-            Download
-          </button>
-        </div>
+        {/* Bottom Promo Card: Download APK di Browser / Update Aplikasi di Mobile App */}
+        <AppDownloadPromoCard role="buyer" isCompact={komoditasDropdownOpen} />
 
       </aside>
 
