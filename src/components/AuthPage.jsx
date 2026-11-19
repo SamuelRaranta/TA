@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plant, 
@@ -15,7 +15,13 @@ import {
   LockKey,
   WarningCircle,
   CircleNotch,
-  Sparkle
+  Sparkle,
+  X,
+  Clock,
+  MagnifyingGlass,
+  WhatsappLogo,
+  EnvelopeSimple,
+  ArrowSquareOut
 } from '@phosphor-icons/react';
 import { supabase } from '../lib/supabaseClient';
 import { notifyNewUserRegistered } from '../lib/notificationService';
@@ -112,6 +118,63 @@ export default function AuthPage({
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [signupSent, setSignupSent] = useState(false);
+
+  // Menu Bantuan Header (2 garis vertikal): Cek Status Akun & Hubungi Admin
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCheckStatusOpen, setIsCheckStatusOpen] = useState(false);
+  const [isContactAdminOpen, setIsContactAdminOpen] = useState(false);
+  const [checkEmail, setCheckEmail] = useState('');
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkResult, setCheckResult] = useState(null);
+  const [checkError, setCheckError] = useState('');
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+  const handleCheckAccountStatus = async (e) => {
+    if (e) e.preventDefault();
+    const queryEmail = checkEmail.trim().toLowerCase();
+    if (!queryEmail) {
+      setCheckError('Silakan masukkan alamat email yang terdaftar.');
+      return;
+    }
+    setCheckLoading(true);
+    setCheckError('');
+    setCheckResult(null);
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, role, kyc_status, created_at, email')
+        .ilike('email', queryEmail)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setCheckResult({ found: true, ...data });
+      } else {
+        setCheckResult({ found: false, email: queryEmail });
+      }
+    } catch (err) {
+      console.error('Cek status akun error:', err);
+      setCheckError('Gagal memeriksa status akun. Pastikan koneksi internet aktif.');
+    } finally {
+      setCheckLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Jangan timpa form ganti-password yang sedang dibuka dari link email.
@@ -663,19 +726,131 @@ export default function AuthPage({
           <span>Kembali ke Beranda</span>
         </button>
 
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          className="theme-toggle-btn"
-          title={theme === 'dark' ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
-          aria-label="Toggle Theme"
-        >
-          {theme === 'dark' ? (
-            <Sun size={20} weight="bold" color="#fbbf24" />
-          ) : (
-            <Moon size={20} weight="bold" color="#475569" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', position: 'relative' }} ref={menuRef}>
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="theme-toggle-btn"
+            title={theme === 'dark' ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
+            aria-label="Toggle Theme"
+          >
+            {theme === 'dark' ? (
+              <Sun size={20} weight="bold" color="#fbbf24" />
+            ) : (
+              <Moon size={20} weight="bold" color="#475569" />
+            )}
+          </button>
+
+          {/* Tombol 2 Garis Vertikal Kecil */}
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(prev => !prev)}
+            className="auth-menu-btn"
+            title="Menu Bantuan & Status Akun"
+            aria-label="Menu Bantuan & Status Akun"
+            aria-expanded={isMenuOpen}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: isMenuOpen ? 'var(--accent-primary-light, #eff6ff)' : 'var(--bg-surface-card, #ffffff)',
+              border: isMenuOpen ? '1px solid var(--accent-primary, #5452f6)' : '1px solid var(--border-subtle, #e2e8f0)',
+              color: isMenuOpen ? 'var(--accent-primary, #5452f6)' : 'var(--text-secondary, #64748b)',
+              cursor: 'pointer',
+              boxShadow: 'var(--shadow-sm)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="7" y="4" width="3" height="16" rx="1.5" />
+              <rect x="14" y="4" width="3" height="16" rx="1.5" />
+            </svg>
+          </button>
+
+          {/* Dropdown Menu */}
+          {isMenuOpen && (
+            <div 
+              style={{
+                position: 'absolute',
+                top: '46px',
+                right: 0,
+                width: '210px',
+                background: 'var(--bg-surface-card, #ffffff)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-subtle, #e2e8f0)',
+                boxShadow: '0 12px 28px rgba(0, 0, 0, 0.12)',
+                padding: '6px',
+                zIndex: 60,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsCheckStatusOpen(true);
+                  setCheckResult(null);
+                  setCheckError('');
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '9px 12px',
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary, #1e293b)',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-canvas-subtle, #f8fafc)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <MagnifyingGlass size={16} weight="bold" color="#5452f6" />
+                <span>Cek Status Akun</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsContactAdminOpen(true);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  width: '100%',
+                  padding: '9px 12px',
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary, #1e293b)',
+                  fontSize: '0.84rem',
+                  fontWeight: 600,
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-canvas-subtle, #f8fafc)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+              >
+                <WhatsappLogo size={16} weight="fill" color="#16a34a" />
+                <span>Hubungi Admin</span>
+              </button>
+            </div>
           )}
-        </button>
+        </div>
       </div>
 
       {/* Main Dual-Column Card Container matching Reference */}
@@ -1374,6 +1549,373 @@ export default function AuthPage({
         </div>
 
       </div>
+
+      {/* ================= MODAL CEK STATUS AKUN ================= */}
+      <AnimatePresence>
+        {isCheckStatusOpen && (
+          <div 
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(6px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem'
+            }}
+            onClick={() => setIsCheckStatusOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 12 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                background: 'var(--bg-surface-card, #ffffff)',
+                borderRadius: '20px',
+                width: '100%',
+                maxWidth: '460px',
+                padding: '1.75rem',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                border: '1px solid var(--border-subtle, #e2e8f0)',
+                position: 'relative'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsCheckStatusOpen(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1.1rem',
+                  right: '1.1rem',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary, #64748b)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px'
+                }}
+              >
+                <X size={20} weight="bold" />
+              </button>
+
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+                <div style={{ 
+                  width: '42px', 
+                  height: '42px', 
+                  borderRadius: '12px', 
+                  background: 'rgba(84, 82, 246, 0.1)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  color: '#5452f6'
+                }}>
+                  <MagnifyingGlass size={22} weight="bold" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                    Cek Status Akun
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)' }}>
+                    Periksa status verifikasi & KYC akun Anda
+                  </p>
+                </div>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleCheckAccountStatus} style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="email"
+                    required
+                    value={checkEmail}
+                    onChange={(e) => setCheckEmail(e.target.value)}
+                    placeholder="Masukkan email Anda..."
+                    style={{
+                      flex: 1,
+                      padding: '0.65rem 0.9rem',
+                      borderRadius: '10px',
+                      border: '1px solid var(--border-subtle, #cbd5e1)',
+                      background: 'var(--bg-canvas, #f8fafc)',
+                      color: 'var(--text-primary, #1e293b)',
+                      fontSize: '0.88rem',
+                      outline: 'none'
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={checkLoading}
+                    style={{
+                      padding: '0.65rem 1.15rem',
+                      borderRadius: '10px',
+                      background: '#5452f6',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: checkLoading ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    {checkLoading ? <CircleNotch size={16} className="animate-spin" weight="bold" /> : 'Periksa'}
+                  </button>
+                </div>
+                {checkError && (
+                  <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 500 }}>
+                    {checkError}
+                  </div>
+                )}
+              </form>
+
+              {/* Result Display */}
+              {checkResult && (
+                <div style={{
+                  padding: '1.1rem',
+                  borderRadius: '14px',
+                  background: checkResult.found 
+                    ? (checkResult.kyc_status === 'verified' ? '#f0fdf4' : checkResult.kyc_status === 'rejected' ? '#fef2f2' : '#fffbeb')
+                    : '#f8fafc',
+                  border: `1px solid ${
+                    checkResult.found
+                      ? (checkResult.kyc_status === 'verified' ? '#bbf7d0' : checkResult.kyc_status === 'rejected' ? '#fecaca' : '#fde68a')
+                      : '#e2e8f0'
+                  }`
+                }}>
+                  {checkResult.found ? (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#1e293b' }}>
+                          {checkResult.full_name || 'Pengguna AgriConnect'}
+                        </span>
+                        <span style={{ 
+                          textTransform: 'uppercase', 
+                          fontSize: '0.7rem', 
+                          fontWeight: 800, 
+                          padding: '2px 8px', 
+                          borderRadius: '6px',
+                          background: 'rgba(0,0,0,0.06)'
+                        }}>
+                          {checkResult.role || 'Petani'}
+                        </span>
+                      </div>
+
+                      {checkResult.kyc_status === 'verified' ? (
+                        <div style={{ color: '#166534', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                            <CheckCircle size={18} weight="fill" color="#16a34a" />
+                            Akun Anda Telah Terverifikasi (Aktif)
+                          </div>
+                          Akun sudah disetujui oleh Admin. Anda dapat langsung login menggunakan email dan password Anda.
+                        </div>
+                      ) : checkResult.kyc_status === 'rejected' ? (
+                        <div style={{ color: '#991b1b', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                            <WarningCircle size={18} weight="fill" color="#dc2626" />
+                            Pendaftaran Akun Ditolak
+                          </div>
+                          Pendaftaran akun Anda ditolak oleh Admin. Silakan hubungi admin untuk konfirmasi kelengkapan data.
+                        </div>
+                      ) : (
+                        <div style={{ color: '#92400e', fontSize: '0.84rem', lineHeight: 1.5 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, marginBottom: '4px' }}>
+                            <Clock size={18} weight="bold" color="#d97706" />
+                            Menunggu Persetujuan Admin (Pending)
+                          </div>
+                          Akun Anda sedang dalam antrean verifikasi KYC. Hubungi admin untuk mempercepat proses persetujuan.
+                          <div style={{ marginTop: '10px' }}>
+                            <a
+                              href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20sudah%20mendaftar%20dengan%20email%20ini.%20Mohon%20bantu%20verifikasi%20akun%20saya."
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '6px 12px',
+                                borderRadius: '8px',
+                                background: '#16a34a',
+                                color: '#ffffff',
+                                textDecoration: 'none',
+                                fontWeight: 700,
+                                fontSize: '0.78rem'
+                              }}
+                            >
+                              <WhatsappLogo size={16} weight="fill" />
+                              Verifikasi Cepat via WhatsApp
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#64748b', fontSize: '0.84rem', lineHeight: 1.5, textAlign: 'center' }}>
+                      <div style={{ fontWeight: 700, color: '#334155', marginBottom: '4px' }}>Email Belum Terdaftar</div>
+                      Email <strong>{checkResult.email}</strong> belum terdaftar di sistem. Silakan pilih menu <strong>Sign Up</strong> untuk mendaftar akun baru.
+                    </div>
+                  )}
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ================= MODAL HUBUNGI ADMIN ================= */}
+      <AnimatePresence>
+        {isContactAdminOpen && (
+          <div 
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              backdropFilter: 'blur(6px)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem'
+            }}
+            onClick={() => setIsContactAdminOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 12 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                background: 'var(--bg-surface-card, #ffffff)',
+                borderRadius: '20px',
+                width: '100%',
+                maxWidth: '440px',
+                padding: '1.75rem',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                border: '1px solid var(--border-subtle, #e2e8f0)',
+                position: 'relative'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setIsContactAdminOpen(false)}
+                style={{
+                  position: 'absolute',
+                  top: '1.1rem',
+                  right: '1.1rem',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary, #64748b)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '6px'
+                }}
+              >
+                <X size={20} weight="bold" />
+              </button>
+
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '1.25rem' }}>
+                <div style={{ 
+                  width: '42px', 
+                  height: '42px', 
+                  borderRadius: '12px', 
+                  background: 'rgba(22, 163, 74, 0.1)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  color: '#16a34a'
+                }}>
+                  <WhatsappLogo size={24} weight="fill" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                    Hubungi Admin
+                  </h3>
+                  <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary, #64748b)' }}>
+                    Bantuan verifikasi akun & kendala teknis
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {/* WhatsApp Card */}
+                <a
+                  href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20membutuhkan%20bantuan%20terkait%20akun%20saya."
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.9rem 1.1rem',
+                    borderRadius: '12px',
+                    background: '#f0fdf4',
+                    border: '1px solid #bbf7d0',
+                    color: '#166534',
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <WhatsappLogo size={22} weight="fill" color="#16a34a" />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>WhatsApp Customer Care</div>
+                      <div style={{ fontSize: '0.78rem', color: '#15803d' }}>0812-4321-8765 (Resmi)</div>
+                    </div>
+                  </div>
+                  <ArrowSquareOut size={16} weight="bold" />
+                </a>
+
+                {/* Email Card */}
+                <a
+                  href="mailto:admin@agriconnect.id?subject=Bantuan%20Akun%20AgriConnect"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.9rem 1.1rem',
+                    borderRadius: '12px',
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    color: '#334155',
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <EnvelopeSimple size={22} weight="bold" color="#5452f6" />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Email Resmi Support</div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>admin@agriconnect.id</div>
+                    </div>
+                  </div>
+                  <ArrowSquareOut size={16} weight="bold" />
+                </a>
+
+                {/* Jam Operasional */}
+                <div style={{ 
+                  padding: '0.75rem 0.9rem', 
+                  borderRadius: '10px', 
+                  background: 'rgba(0,0,0,0.02)', 
+                  fontSize: '0.76rem', 
+                  color: 'var(--text-secondary, #64748b)',
+                  lineHeight: 1.4,
+                  marginTop: '4px'
+                }}>
+                  ⏰ <strong>Jam Layanan:</strong> Senin – Sabtu (08.00 – 17.00 WITA). Administrator berdomisili di Kabupaten Minahasa, Sulawesi Utara.
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

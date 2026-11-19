@@ -354,16 +354,19 @@ export default function RiwayatTransaksiPembeli({
               Transaksi yang telah lunas dan barang diterima resmi, dengan kolom ulasan untuk mitra petani.
             </p>
           </div>
-          <span style={{
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            padding: '4px 10px',
-            background: 'rgba(16, 185, 129, 0.1)',
-            color: '#059669',
-            borderRadius: '999px'
-          }}>
-            {filteredList.length} Transaksi Selesai
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span className="table-mobile-scroll-hint">↔ Geser tabel ke samping</span>
+            <span style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              padding: '4px 10px',
+              background: 'rgba(16, 185, 129, 0.1)',
+              color: '#059669',
+              borderRadius: '999px'
+            }}>
+              {filteredList.length} Transaksi Selesai
+            </span>
+          </div>
         </div>
 
         <div style={{ overflowX: 'auto' }}>

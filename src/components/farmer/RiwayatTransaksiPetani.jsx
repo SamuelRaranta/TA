@@ -233,11 +233,14 @@ export default function FarmerTransactions({ transactions = [], onNavigate, isLo
 
       {/* Tabel Transaksi (selaras halaman Pembayaran pembeli) */}
       <div style={{ background: 'var(--card-bg, #ffffff)', border: '1px solid var(--border-subtle, #e8ecf1)', borderRadius: '14px', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-        <div style={{ padding: '1rem 1.25rem 0.8rem' }}>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>Daftar Transaksi Masuk</h3>
-          <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-            Pembeli, komoditas, total, pembayaran, batas waktu 1 hari, status, serta aksi.
-          </p>
+        <div style={{ padding: '1rem 1.25rem 0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>Daftar Transaksi Masuk</h3>
+            <p style={{ margin: '3px 0 0', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+              Pembeli, komoditas, total, pembayaran, batas waktu 1 hari, status, serta aksi.
+            </p>
+          </div>
+          <span className="table-mobile-scroll-hint">↔ Geser tabel ke samping</span>
         </div>
 
         <div style={{ overflowX: 'auto' }}>

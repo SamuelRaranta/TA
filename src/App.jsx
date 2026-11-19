@@ -59,6 +59,40 @@ function ViewLoadingFallback({ message = 'Memuat modul aplikasi...' }) {
   );
 }
 
+// Banner status koneksi online / offline
+function OfflineNetworkBanner({ isOnline, showRestored }) {
+  if (isOnline && !showRestored) return null;
+  return (
+    <div 
+      role="status" 
+      aria-live="polite" 
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 99999,
+        background: isOnline ? '#16a34a' : '#ea580c',
+        color: '#ffffff',
+        textAlign: 'center',
+        padding: '6px 14px',
+        fontSize: '0.8rem',
+        fontWeight: 700,
+        boxShadow: '0 3px 10px rgba(0,0,0,0.18)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        transition: 'all 0.3s ease'
+      }}
+    >
+      <span>
+        {isOnline ? '✓ Koneksi internet terhubung kembali.' : '⚠️ Koneksi internet terputus. Mode offline aktif.'}
+      </span>
+    </div>
+  );
+}
+
 // Cache sesi dibersihkan total (generik + per-role) agar tidak ada identitas basi lintas peran.
 const clearAllAuthCache = () => {
   try {
@@ -210,6 +244,31 @@ function AppContent() {
   const viewRef = useRef(currentView);
   useEffect(() => { viewRef.current = currentView; }, [currentView]);
   const [selectedRole, setSelectedRole] = useState('petani');
+
+  // Deteksi status koneksi online/offline perangkat
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
+  const [showOnlineRestored, setShowOnlineRestored] = useState(false);
+
+  useEffect(() => {
+    let timer;
+    const handleOnline = () => {
+      setIsOnline(true);
+      setShowOnlineRestored(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setShowOnlineRestored(false), 3500);
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      setShowOnlineRestored(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearTimeout(timer);
+    };
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -399,8 +458,10 @@ function AppContent() {
         if (res?.error) throw new Error(res.error.message);
       } catch (e) {
         if (cancelled) return;
-        // Gagal baca profil karena network/timeout -> jangan tendang jika optimistis.
-        if (e?.message === 'verify-timeout' && readCachedUserForRole(requestedRole)?.id) {
+        // Gagal baca profil karena network/timeout/offline -> jangan tendang jika ada sesi lokal valid.
+        const cachedUser = readCachedUserForRole(requestedRole);
+        if (cachedUser?.id || !navigator.onLine || e?.message === 'verify-timeout') {
+          console.warn('[App] Jaringan terputus / verifikasi tertunda, pertahankan sesi lokal:', e?.message || e);
           await denyAccess(false);
           return;
         }
@@ -444,12 +505,24 @@ function AppContent() {
       }
 
       if (!profile || !['petani', 'pembeli', 'admin'].includes(profile.role)) {
+        // Jika offline atau ada cache lokal, pertahankan sesi
+        const cachedUser = readCachedUserForRole(requestedRole);
+        if (cachedUser?.id || !navigator.onLine) {
+          await denyAccess(false);
+          return;
+        }
         await denyAccess(true);
         return;
       }
 
       const profileApproved = profile.role === 'admin' || profile.kyc_status === 'verified';
       if (!profileApproved) {
+        // Jika profil ditolak secara definitif
+        if (profile.kyc_status === 'rejected') {
+          await denyAccess(true);
+          return;
+        }
+        // Jika status masih pending, arahkan ke login dengan notifikasi lembut
         await denyAccess(true);
         return;
       }
@@ -618,146 +691,155 @@ function AppContent() {
     }
   };
 
-  // If user is on the Login or Signup view, render dedicated AuthPage matching reference
-  if (currentView === 'login' || currentView === 'signup') {
-    return (
-      <Suspense fallback={<ViewLoadingFallback message="Memuat halaman autentikasi..." />}>
-        <AuthPage 
-          initialMode={currentView}
-          initialRole={selectedRole}
-          onBackToHome={handleBackToHome}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-          onNavigateToDashboard={() => handleOpenFarmerDashboard()}
-          onNavigateToBuyerDashboard={() => handleOpenBuyerDashboard()}
-          onNavigateToAdminDashboard={() => handleOpenAdminDashboard()}
-        />
-      </Suspense>
-    );
-  }
+  const renderCurrentView = () => {
+    // If user is on the Login or Signup view, render dedicated AuthPage matching reference
+    if (currentView === 'login' || currentView === 'signup') {
+      return (
+        <Suspense fallback={<ViewLoadingFallback message="Memuat halaman autentikasi..." />}>
+          <AuthPage 
+            initialMode={currentView}
+            initialRole={selectedRole}
+            onBackToHome={handleBackToHome}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+            onNavigateToDashboard={() => handleOpenFarmerDashboard()}
+            onNavigateToBuyerDashboard={() => handleOpenBuyerDashboard()}
+            onNavigateToAdminDashboard={() => handleOpenAdminDashboard()}
+          />
+        </Suspense>
+      );
+    }
 
-  const isDashboardView = ['farmer-dashboard', 'buyer-dashboard', 'admin-dashboard'].includes(currentView);
-  if (isDashboardView && dashboardAccess.view !== currentView) {
-    return (
-      <div role="status" aria-live="polite" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
-        <div style={{ textAlign: 'center', maxWidth: '360px' }}>
-          <div style={{ fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.5rem' }}>Memeriksa sesi dan hak akses...</div>
-          <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary, #64748b)', marginBottom: '1.25rem' }}>Menunggu konfirmasi Supabase. Jika lebih dari 10 detik, coba muat ulang verifikasi.</div>
-          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
-            <button
-              type="button"
-              onClick={() => setAuthVersion(v => v + 1)}
-              style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: '#5452f6', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
-            >
-              Coba Lagi
-            </button>
-            <button
-              type="button"
-              onClick={handleBackToHome}
-              style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: 'transparent', color: 'var(--text-secondary, #64748b)', border: '1px solid var(--border-subtle, #e2e8f0)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
-            >
-              Beranda
-            </button>
+    const isDashboardView = ['farmer-dashboard', 'buyer-dashboard', 'admin-dashboard'].includes(currentView);
+    if (isDashboardView && dashboardAccess.view !== currentView) {
+      return (
+        <div role="status" aria-live="polite" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: '2rem' }}>
+          <div style={{ textAlign: 'center', maxWidth: '360px' }}>
+            <div style={{ fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.5rem' }}>Memeriksa sesi dan hak akses...</div>
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary, #64748b)', marginBottom: '1.25rem' }}>Menunggu konfirmasi Supabase. Jika lebih dari 10 detik, coba muat ulang verifikasi.</div>
+            <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setAuthVersion(v => v + 1)}
+                style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: '#5452f6', color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Coba Lagi
+              </button>
+              <button
+                type="button"
+                onClick={handleBackToHome}
+                style={{ padding: '0.55rem 1.1rem', borderRadius: '8px', background: 'transparent', color: 'var(--text-secondary, #64748b)', border: '1px solid var(--border-subtle, #e2e8f0)', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Beranda
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  // If user is on the Farmer Dashboard view
-  if (currentView === 'farmer-dashboard') {
+    // If user is on the Farmer Dashboard view
+    if (currentView === 'farmer-dashboard') {
+      return (
+        <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Petani..." />}>
+          <FarmerDashboard
+            onBackToHome={handleBackToHome}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        </Suspense>
+      );
+    }
+
+    // If user is on the Buyer Dashboard view
+    if (currentView === 'buyer-dashboard') {
+      return (
+        <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Pembeli..." />}>
+          <BuyerDashboard
+            onBackToHome={handleBackToHome}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        </Suspense>
+      );
+    }
+
+    // If user is on the Admin Dashboard view
+    if (currentView === 'admin-dashboard') {
+      return (
+        <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Administrator..." />}>
+          <AdminDashboard
+            onBackToHome={handleBackToHome}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        </Suspense>
+      );
+    }
+
     return (
-      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Petani..." />}>
-        <FarmerDashboard
-          onBackToHome={handleBackToHome}
+      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-canvas)', color: 'var(--text-primary)' }}>
+        {/* Navbar with Dark/Light Toggle */}
+        <GlassNavbar 
+          onOpenLogin={handleOpenLogin}
+          onOpenSignup={() => handleOpenSignup('petani')}
+          onOpenFarmerDashboard={handleOpenFarmerDashboard}
+          onOpenBuyerDashboard={handleOpenBuyerDashboard}
+          onOpenAdminDashboard={handleOpenAdminDashboard}
           theme={theme}
           onToggleTheme={handleToggleTheme}
         />
-      </Suspense>
-    );
-  }
 
-  // If user is on the Buyer Dashboard view
-  if (currentView === 'buyer-dashboard') {
-    return (
-      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Pembeli..." />}>
-        <BuyerDashboard
-          onBackToHome={handleBackToHome}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-        />
-      </Suspense>
-    );
-  }
+        {/* Main Landing Sections */}
+        <main style={{ flex: 1 }}>
+          <HeroSection 
+            onOpenSimulation={handleScrollToCommodities}
+            onRoleSelect={(role) => {
+              if (role === 'petani') {
+                handleOpenFarmerDashboard();
+              } else if (role === 'pembeli') {
+                handleOpenBuyerDashboard();
+              } else {
+                handleOpenSignup(role);
+              }
+            }}
+          />
 
-  // If user is on the Admin Dashboard view
-  if (currentView === 'admin-dashboard') {
-    return (
-      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Administrator..." />}>
-        <AdminDashboard
-          onBackToHome={handleBackToHome}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
-        />
-      </Suspense>
-    );
-  }
+          <MarketPriceTicker />
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-canvas)', color: 'var(--text-primary)' }}>
-      {/* Navbar with Dark/Light Toggle */}
-      <GlassNavbar 
-        onOpenLogin={handleOpenLogin}
-        onOpenSignup={() => handleOpenSignup('petani')}
-        onOpenFarmerDashboard={handleOpenFarmerDashboard}
-        onOpenBuyerDashboard={handleOpenBuyerDashboard}
-        onOpenAdminDashboard={handleOpenAdminDashboard}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+          <FeaturesSection 
+            onOpenSimulation={handleScrollToCommodities}
+          />
 
-      {/* Main Landing Sections */}
-      <main style={{ flex: 1 }}>
-        <HeroSection 
-          onOpenSimulation={handleScrollToCommodities}
-          onRoleSelect={(role) => {
-            if (role === 'petani') {
-              handleOpenFarmerDashboard();
-            } else if (role === 'pembeli') {
-              handleOpenBuyerDashboard();
-            } else {
-              handleOpenSignup(role);
-            }
-          }}
-        />
+          <CommodityShowcase 
+            onSelectCommodity={() => handleOpenSignup('pembeli')}
+            onRequireLogin={handleOpenLogin}
+            onRegister={() => handleOpenSignup('pembeli')}
+          />
 
-        <MarketPriceTicker />
+          {/* Dedicated Portal Access Section at the bottom of the landing page */}
+          <PortalAccessSection 
+            onOpenFarmerDashboard={handleOpenFarmerDashboard}
+            onOpenBuyerDashboard={handleOpenBuyerDashboard}
+            onOpenAdminDashboard={handleOpenAdminDashboard}
+          />
+        </main>
 
-        <FeaturesSection 
-          onOpenSimulation={handleScrollToCommodities}
-        />
-
-        <CommodityShowcase 
-          onSelectCommodity={() => handleOpenSignup('pembeli')}
-          onRequireLogin={handleOpenLogin}
-          onRegister={() => handleOpenSignup('pembeli')}
-        />
-
-        {/* Dedicated Portal Access Section at the bottom of the landing page */}
-        <PortalAccessSection 
+        {/* Footer with portal links */}
+        <Footer 
           onOpenFarmerDashboard={handleOpenFarmerDashboard}
           onOpenBuyerDashboard={handleOpenBuyerDashboard}
           onOpenAdminDashboard={handleOpenAdminDashboard}
         />
-      </main>
+      </div>
+    );
+  };
 
-      {/* Footer with portal links */}
-      <Footer 
-        onOpenFarmerDashboard={handleOpenFarmerDashboard}
-        onOpenBuyerDashboard={handleOpenBuyerDashboard}
-        onOpenAdminDashboard={handleOpenAdminDashboard}
-      />
-    </div>
+  return (
+    <>
+      <OfflineNetworkBanner isOnline={isOnline} showRestored={showOnlineRestored} />
+      {renderCurrentView()}
+    </>
   );
 }
 

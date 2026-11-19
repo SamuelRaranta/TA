@@ -144,8 +144,18 @@ export default function FarmerDashboard({
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Accordion state for 'Komoditas' dropdown in sidebar
-  const [komoditasDropdownOpen, setKomoditasDropdownOpen] = useState(true);
+  // Accordion state for 'Komoditas' dropdown in sidebar (default tertutup saat login)
+  const [komoditasDropdownOpen, setKomoditasDropdownOpen] = useState(() => {
+    const initialTab = getFarmerTabFromHash();
+    return ['lihat-komoditas', 'cari-penawaran', 'komoditas-saya'].includes(initialTab);
+  });
+
+  // Buka accordion otomatis jika user berpindah ke salah satu sub-halaman komoditas
+  useEffect(() => {
+    if (['lihat-komoditas', 'cari-penawaran', 'komoditas-saya'].includes(activeTab)) {
+      setKomoditasDropdownOpen(true);
+    }
+  }, [activeTab]);
 
   // Collapsed sidebar state (Desktop collapse)
   const [isCollapsed, setIsCollapsed] = useState(false);

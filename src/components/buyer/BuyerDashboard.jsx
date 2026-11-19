@@ -141,8 +141,18 @@ export default function BuyerDashboard({
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  // Accordion state for 'Eksplorasi Komoditas' dropdown in sidebar
-  const [komoditasDropdownOpen, setKomoditasDropdownOpen] = useState(true);
+  // Accordion state for 'Eksplorasi Komoditas' dropdown in sidebar (default tertutup saat login)
+  const [komoditasDropdownOpen, setKomoditasDropdownOpen] = useState(() => {
+    const initialTab = getBuyerTabFromHash();
+    return ['katalog', 'penawaran', 'ajukan-penawaran', 'watchlist', 'rfq'].includes(initialTab);
+  });
+
+  // Buka accordion otomatis jika user berpindah ke salah satu sub-halaman komoditas
+  useEffect(() => {
+    if (['katalog', 'penawaran', 'ajukan-penawaran', 'watchlist', 'rfq'].includes(activeTab)) {
+      setKomoditasDropdownOpen(true);
+    }
+  }, [activeTab]);
 
   // Collapsed sidebar state (Desktop collapse)
   const [isCollapsed, setIsCollapsed] = useState(false);

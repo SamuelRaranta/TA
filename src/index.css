@@ -3117,6 +3117,28 @@ p {
   overflow-x: auto;
 }
 
+/* Mobile Table Horizontal Scroll Hint */
+.table-mobile-scroll-hint {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-primary, #5452f6);
+  background: rgba(84, 82, 246, 0.08);
+  border: 1px solid rgba(84, 82, 246, 0.18);
+  padding: 3px 8px;
+  border-radius: 9999px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+@media (max-width: 991px) {
+  .table-mobile-scroll-hint {
+    display: inline-flex;
+  }
+}
+
 .farmer-data-table {
   width: 100%;
   border-collapse: collapse;
