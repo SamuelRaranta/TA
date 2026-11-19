@@ -8,5 +8,18 @@ export default defineConfig({
     port: 5173,
     host: true,
     allowedHosts: true
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-motion': ['motion'],
+          'vendor-icons': ['@phosphor-icons/react']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1200
   }
 })

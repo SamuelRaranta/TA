@@ -1,5 +1,6 @@
-// AgriConnect Production Service Worker (PWA)
-const CACHE_NAME = 'agriconnect-v1';
+// AgriConnect Production Service Worker (PWA v2)
+const CACHE_NAME = 'agriconnect-v2-live';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -10,25 +11,26 @@ const STATIC_ASSETS = [
   '/icons/icon-maskable-512.png'
 ];
 
-// Install Event — precache core static assets
+// Install Event — precache core static assets & force immediate activation
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Cache addAll warning:', err);
+        console.warn('[SW] Precache warning:', err);
       });
     })
   );
 });
 
-// Activate Event — cleanup old caches
+// Activate Event — purge any outdated cache versions immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[SW] Menghapus cache usang:', key);
             return caches.delete(key);
           }
         })
@@ -37,40 +39,76 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event — Network-first for dynamic API & data, Cache-first for icons/fonts
+// Message Listener for explicit skip waiting requests
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+// Fetch Event — Network-First for HTML/Navigasi, Cache-First for Hashed Assets
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Bypass non-GET requests and Supabase API calls (always live network)
-  if (request.method !== 'GET' || url.hostname.includes('supabase.co') || url.hostname.includes('midtrans.com')) {
+  // 1. Bypass non-GET, Supabase API, and external service calls (always network)
+  if (
+    request.method !== 'GET' ||
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('midtrans.com') ||
+    url.hostname.includes('googleapis.com') ||
+    url.hostname.includes('unsplash.com')
+  ) {
     return;
   }
 
-  // Navigation requests: Network-first with cache fallback
-  if (request.mode === 'navigate') {
+  // 2. Navigation requests & HTML: NETWORK-FIRST agar pengguna selalu dapat versi terbaru
+  if (request.mode === 'navigate' || request.destination === 'document' || url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match('/index.html') || caches.match('/');
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          return caches.match('/index.html') || caches.match('/');
+        })
+    );
+    return;
+  }
+
+  // 3. Vite Hashed Assets (/assets/*): Cache-First karena nama file immutable berbasis hash unik
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        });
       })
     );
     return;
   }
 
-  // Static assets (images, fonts, scripts): Stale-while-revalidate
+  // 4. Default Static Assets: Network-first with cache fallback
   event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      const fetchPromise = fetch(request).then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseToCache);
-          });
+    fetch(request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const copy = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
         }
         return networkResponse;
-      }).catch(() => cachedResponse);
-
-      return cachedResponse || fetchPromise;
-    })
+      })
+      .catch(() => caches.match(request))
   );
 });

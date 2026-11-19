@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import GlassNavbar from './components/GlassNavbar';
 import HeroSection from './components/HeroSection';
 import MarketPriceTicker from './components/MarketPriceTicker';
@@ -6,12 +6,58 @@ import CommodityShowcase from './components/CommodityShowcase';
 import FeaturesSection from './components/FeaturesSection';
 import PortalAccessSection from './components/PortalAccessSection';
 import Footer from './components/Footer';
-import AuthPage from './components/AuthPage';
-import FarmerDashboard from './components/farmer/FarmerDashboard';
-import BuyerDashboard from './components/buyer/BuyerDashboard';
-import AdminDashboard from './components/admin/AdminDashboard';
 import { supabase } from './lib/supabaseClient';
 import { notifyNewUserRegistered } from './lib/notificationService';
+
+// Code-Splitting: Lazy load modul-modul besar agar landing page mobile sangat ringan (< 250 kB)
+const AuthPage = lazy(() => import('./components/AuthPage'));
+const FarmerDashboard = lazy(() => import('./components/farmer/FarmerDashboard'));
+const BuyerDashboard = lazy(() => import('./components/buyer/BuyerDashboard'));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+
+// Fallback spinner saat memuat modul dashboard / autentikasi
+function ViewLoadingFallback({ message = 'Memuat modul aplikasi...' }) {
+  return (
+    <div 
+      role="status" 
+      aria-live="polite" 
+      style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        backgroundColor: 'var(--bg-canvas, #f8fafc)', 
+        color: 'var(--text-primary, #1e293b)',
+        fontFamily: 'Plus Jakarta Sans, sans-serif'
+      }}
+    >
+      <div style={{ textAlign: 'center', padding: '2rem' }}>
+        <div 
+          style={{ 
+            width: '40px', 
+            height: '40px', 
+            border: '3px solid rgba(84, 82, 246, 0.15)', 
+            borderTopColor: '#5452f6', 
+            borderRadius: '50%', 
+            margin: '0 auto 1rem', 
+            animation: 'agri-spin 0.75s linear infinite' 
+          }} 
+        />
+        <style>{`
+          @keyframes agri-spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+        <div style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.25rem' }}>
+          AgriConnect
+        </div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #64748b)' }}>
+          {message}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Cache sesi dibersihkan total (generik + per-role) agar tidak ada identitas basi lintas peran.
 const clearAllAuthCache = () => {
@@ -575,16 +621,18 @@ function AppContent() {
   // If user is on the Login or Signup view, render dedicated AuthPage matching reference
   if (currentView === 'login' || currentView === 'signup') {
     return (
-      <AuthPage 
-        initialMode={currentView}
-        initialRole={selectedRole}
-        onBackToHome={handleBackToHome}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-        onNavigateToDashboard={() => handleOpenFarmerDashboard()}
-        onNavigateToBuyerDashboard={() => handleOpenBuyerDashboard()}
-        onNavigateToAdminDashboard={() => handleOpenAdminDashboard()}
-      />
+      <Suspense fallback={<ViewLoadingFallback message="Memuat halaman autentikasi..." />}>
+        <AuthPage 
+          initialMode={currentView}
+          initialRole={selectedRole}
+          onBackToHome={handleBackToHome}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+          onNavigateToDashboard={() => handleOpenFarmerDashboard()}
+          onNavigateToBuyerDashboard={() => handleOpenBuyerDashboard()}
+          onNavigateToAdminDashboard={() => handleOpenAdminDashboard()}
+        />
+      </Suspense>
     );
   }
 
@@ -619,33 +667,39 @@ function AppContent() {
   // If user is on the Farmer Dashboard view
   if (currentView === 'farmer-dashboard') {
     return (
-      <FarmerDashboard
-        onBackToHome={handleBackToHome}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Petani..." />}>
+        <FarmerDashboard
+          onBackToHome={handleBackToHome}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+        />
+      </Suspense>
     );
   }
 
   // If user is on the Buyer Dashboard view
   if (currentView === 'buyer-dashboard') {
     return (
-      <BuyerDashboard
-        onBackToHome={handleBackToHome}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Pembeli..." />}>
+        <BuyerDashboard
+          onBackToHome={handleBackToHome}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+        />
+      </Suspense>
     );
   }
 
   // If user is on the Admin Dashboard view
   if (currentView === 'admin-dashboard') {
     return (
-      <AdminDashboard
-        onBackToHome={handleBackToHome}
-        theme={theme}
-        onToggleTheme={handleToggleTheme}
-      />
+      <Suspense fallback={<ViewLoadingFallback message="Memuat Dashboard Administrator..." />}>
+        <AdminDashboard
+          onBackToHome={handleBackToHome}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
+        />
+      </Suspense>
     );
   }
 
