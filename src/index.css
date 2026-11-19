@@ -122,22 +122,16 @@ html {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.3s ease, color 0.3s ease;
-  /* Mencegah native pull-to-refresh mendadak di browser mobile saat scroll ke atas */
-  overscroll-behavior-y: none;
-  -webkit-overscroll-behavior-y: none;
 }
 
 body {
   min-height: 100vh;
-  min-height: 100dvh;
   position: relative;
   overflow-x: hidden;
   line-height: 1.6;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  /* Mencegah overscroll bounce reload */
-  overscroll-behavior-y: none;
-  -webkit-overscroll-behavior-y: none;
+  overscroll-behavior-y: contain;
 }
 
 button, input, select, textarea, option, optgroup {
@@ -16132,22 +16126,21 @@ p {
 
 /* 1. Global Reset & Overflow Protection & Mobile Native Scrolling */
 @media (max-width: 768px) {
-  html, body {
+  html {
     max-width: 100vw;
     overflow-x: hidden;
-    overflow-y: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-    overscroll-behavior-y: none !important;
-    -webkit-overscroll-behavior-y: none !important;
-    height: auto !important;
-    min-height: 100% !important;
+  }
+
+  body {
+    max-width: 100vw;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 
   #root {
     min-height: 100dvh;
     overflow-x: hidden;
-    overflow-y: visible;
-    overscroll-behavior-y: none;
   }
 
   /* Unstick Dashboard scroll trapping: let the document scroll naturally */
@@ -16157,19 +16150,15 @@ p {
     height: auto !important;
     min-height: 100dvh !important;
     max-height: none !important;
-    overflow-y: visible !important;
-    overflow-x: hidden !important;
-    overscroll-behavior-y: none !important;
+    overflow: visible !important;
   }
 
   .clone-main-content {
     height: auto !important;
     min-height: 100dvh !important;
     max-height: none !important;
-    overflow-y: visible !important;
-    overflow-x: hidden !important;
+    overflow: visible !important;
     flex: 1 0 auto !important;
-    overscroll-behavior-y: none !important;
   }
 
   .clone-page-body {
