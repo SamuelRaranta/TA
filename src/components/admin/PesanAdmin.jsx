@@ -15,7 +15,8 @@ import {
   X,
   ArrowRight,
   FileText,
-  Image as ImageIcon
+  Image as ImageIcon,
+  CaretLeft
 } from '@phosphor-icons/react';
 import {
 
@@ -224,7 +225,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
 
   return (
     <div className="clone-chat-page-wrap">
-      <div className="clone-chat-app-container">
+      <div className={`clone-chat-app-container ${activeChat ? 'has-active-chat' : ''}`}>
         
         {/* ================= LEFT COLUMN: CHATS LIST ================= */}
         <div className="clone-chat-sidebar">
@@ -337,6 +338,15 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
             <>
               {/* Header Conversation: HANYA NAMA DAN DIBAWAHNYA ROLE */}
               <div className="clone-chat-main-header">
+                <button
+                  type="button"
+                  className="clone-chat-mobile-back-btn"
+                  onClick={() => setActiveChat(null)}
+                  title="Kembali ke daftar obrolan"
+                  aria-label="Kembali"
+                >
+                  <CaretLeft size={20} weight="bold" />
+                </button>
                 <div className="clone-chat-partner-info">
                   <div className="clone-chat-avatar-wrap header">
                     <img src={activeChat.avatar || DEFAULT_AVATAR} alt={activeChat.name} className="clone-chat-avatar-img" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />

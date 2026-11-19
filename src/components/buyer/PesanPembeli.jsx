@@ -19,7 +19,8 @@ import {
   Phone,
   Envelope,
   MapPin,
-  Clock
+  Clock,
+  CaretLeft
 } from '@phosphor-icons/react';
 import {
 
@@ -411,7 +412,7 @@ export default function BuyerChatView({ currentUserId: propUserId, currentUserPr
       )}
 
       {/* Main Dribbble-Style Chat Container - Fully Frozen */}
-      <div className="clone-chat-app-container">
+      <div className={`clone-chat-app-container ${activeChat ? 'has-active-chat' : ''}`}>
         
         {/* ================= LEFT COLUMN: CHATS LIST ================= */}
         <div className="clone-chat-sidebar">
@@ -562,6 +563,15 @@ export default function BuyerChatView({ currentUserId: propUserId, currentUserPr
             <>
               {/* Conversation Top Header: HANYA NAMA DAN DIBAWAHNYA ROLE */}
               <div className="clone-chat-main-header">
+                <button
+                  type="button"
+                  className="clone-chat-mobile-back-btn"
+                  onClick={() => setActiveChat(null)}
+                  title="Kembali ke daftar obrolan"
+                  aria-label="Kembali"
+                >
+                  <CaretLeft size={20} weight="bold" />
+                </button>
                 <div className="clone-chat-partner-info">
                   <div className="clone-chat-avatar-wrap header">
                     <img src={activeChat.avatar || DEFAULT_AVATAR} alt={activeChat.name} className="clone-chat-avatar-img" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />

@@ -15,7 +15,8 @@ import {
   X,
   ArrowRight,
   CheckCircle,
-  Clock
+  Clock,
+  CaretLeft
 } from '@phosphor-icons/react';
 import {
   fetchRealProfiles,
@@ -403,7 +404,7 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
       )}
 
       {/* Main Dribbble-Style Chat Container - Fully Frozen */}
-      <div className="clone-chat-app-container">
+      <div className={`clone-chat-app-container ${activeChat ? 'has-active-chat' : ''}`}>
         {/* ================= LEFT COLUMN: CHATS LIST ================= */}
         <div className="clone-chat-sidebar">
           {/* Frozen Top Section in Sidebar */}
@@ -550,6 +551,15 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
             <>
               {/* Conversation Top Header: HANYA NAMA DAN DIBAWAHNYA ROLE */}
               <div className="clone-chat-main-header">
+                <button
+                  type="button"
+                  className="clone-chat-mobile-back-btn"
+                  onClick={() => setActiveChat(null)}
+                  title="Kembali ke daftar obrolan"
+                  aria-label="Kembali"
+                >
+                  <CaretLeft size={20} weight="bold" />
+                </button>
                 <div className="clone-chat-partner-info">
                   <div className="clone-chat-avatar-wrap header">
                     <img src={activeChat.avatar} alt={activeChat.name} className="clone-chat-avatar-img" />

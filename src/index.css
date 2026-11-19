@@ -16804,25 +16804,234 @@ p {
   }
 }
 
-/* 11. Modals & Dialogs on Mobile */
+/* 11. Modals & Dialogs on Mobile: Bottom-sheet feel with full viewport protection */
 @media (max-width: 640px) {
   .modal-overlay,
-  .clone-modal-backdrop {
-    padding: 0.75rem !important;
+  .clone-modal-overlay,
+  .clone-modal-backdrop,
+  .settings-modal-overlay {
+    padding: 0.65rem !important;
+    align-items: flex-end !important;
   }
 
   .modal-container,
-  .clone-modal-box {
+  .clone-modal-card,
+  .clone-modal-box,
+  .settings-modal-box {
     width: 100% !important;
-    max-width: calc(100vw - 1.5rem) !important;
-    padding: 1.25rem 1rem !important;
-    border-radius: 16px !important;
-    max-height: 88vh !important;
-    overflow-y: auto !important;
+    max-width: 100% !important;
+    max-height: 88dvh !important;
+    border-radius: 18px 18px 12px 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    margin: 0 !important;
+  }
+
+  .modal-header,
+  .clone-modal-header,
+  .settings-modal-header {
+    padding: 1rem 1.15rem !important;
+    flex-shrink: 0 !important;
   }
 
   .modal-header h3,
-  .clone-modal-title {
+  .clone-modal-title,
+  .settings-modal-title {
     font-size: 1.1rem !important;
+  }
+
+  .modal-body,
+  .clone-modal-body,
+  .settings-modal-body {
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    flex: 1 1 auto !important;
+  }
+
+  .modal-footer,
+  .clone-modal-footer,
+  .settings-modal-actions {
+    padding: 0.75rem 1rem !important;
+    flex-shrink: 0 !important;
+    flex-wrap: wrap !important;
+    gap: 0.5rem !important;
+  }
+
+  .modal-footer button,
+  .clone-modal-footer button,
+  .settings-modal-actions button {
+    flex: 1 !important;
+    min-height: 40px !important;
+    justify-content: center !important;
+  }
+}
+
+/* 12. Universal Mobile Form Grid Fixes (Prevents cramped 2-col and 3-col rows) */
+@media (max-width: 600px) {
+  .clone-modal-body div[style*="grid-template-columns"],
+  .clone-modal-body div[style*="gridTemplateColumns"],
+  .modal-container div[style*="grid-template-columns"],
+  .modal-container div[style*="gridTemplateColumns"],
+  .settings-modal-box div[style*="grid-template-columns"],
+  .settings-modal-box div[style*="gridTemplateColumns"],
+  .form-grid-2col,
+  .form-grid-3col {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+}
+
+/* 13. Mobile Chat App Responsiveness (Pesan Petani, Pembeli, Admin) */
+.clone-chat-mobile-back-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .clone-chat-mobile-back-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 8px !important;
+    background: var(--bg-canvas-subtle, #f1f5f9) !important;
+    border: 1px solid var(--border-subtle, #e2e8f0) !important;
+    color: var(--text-primary, #1e293b) !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    margin-right: 0.5rem !important;
+  }
+
+  .clone-chat-app-container {
+    position: relative !important;
+    height: 100% !important;
+  }
+
+  /* When no chat is selected on mobile: show full-width chat list */
+  .clone-chat-sidebar {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    display: flex !important;
+    height: 100% !important;
+  }
+
+  .clone-chat-main {
+    display: none !important;
+  }
+
+  /* When a chat partner is selected on mobile: hide list, show conversation */
+  .clone-chat-app-container.has-active-chat .clone-chat-sidebar {
+    display: none !important;
+  }
+
+  .clone-chat-app-container.has-active-chat .clone-chat-main {
+    display: flex !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    height: 100% !important;
+  }
+
+  .clone-chat-main-header {
+    padding: 0.65rem 0.85rem !important;
+  }
+}
+
+/* 14. Section Headers, Action Buttons & Proposal Filters across Dashboard tabs */
+@media (max-width: 640px) {
+  .farmer-section-header,
+  .buyer-section-header,
+  .admin-section-header {
+    gap: 0.5rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .farmer-section-header > div:first-child,
+  .buyer-section-header > div:first-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.65rem !important;
+  }
+
+  .farmer-section-header .clone-btn-primary,
+  .buyer-section-header .clone-btn-primary {
+    width: 100% !important;
+    justify-content: center !important;
+    height: 40px !important;
+  }
+
+  .farmer-page-title,
+  .buyer-page-title {
+    font-size: 1.28rem !important;
+  }
+
+  .proposal-filter-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    padding: 0.65rem !important;
+  }
+
+  .proposal-search-wrap {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .proposal-filter-bar .proposal-filter-select {
+    width: 100% !important;
+    height: 40px !important;
+    font-size: 0.82rem !important;
+  }
+}
+
+/* 15. SaaS Tables & Data Grids on Mobile */
+@media (max-width: 768px) {
+  .um-table-card,
+  .clone-table-responsive,
+  div:has(> table) {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .um-th, .um-td {
+    padding: 0.65rem 0.85rem !important;
+    font-size: 0.78rem !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* 16. Auth Page Mobile Form Factor Polish */
+@media (max-width: 480px) {
+  .auth-page-wrapper {
+    padding: 1rem 0.65rem !important;
+  }
+
+  .auth-card-container {
+    border-radius: 16px !important;
+    min-height: auto !important;
+  }
+
+  .auth-right-col {
+    padding: 1.5rem 1.15rem !important;
+  }
+
+  .auth-heading {
+    font-size: 1.35rem !important;
+  }
+
+  .auth-subtext {
+    font-size: 0.82rem !important;
+    margin-bottom: 1.15rem !important;
+  }
+
+  .auth-role-tabs {
+    gap: 0.35rem !important;
+    margin-bottom: 1rem !important;
+  }
+
+  .auth-role-tab {
+    padding: 0.45rem 0.5rem !important;
+    font-size: 0.8rem !important;
   }
 }
