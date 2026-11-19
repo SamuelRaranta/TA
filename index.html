@@ -44,17 +44,30 @@
     
     <!-- PWA Service Worker Registration with Instant Update -->
     <script>
+      // Bersihkan cache usang versi sebelumnya secara otomatis saat aplikasi dimuat
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => {
+            if (key !== 'agriconnect-v5-scrollfix') {
+              console.log('[CacheBuster] Menghapus cache versi lama:', key);
+              caches.delete(key);
+            }
+          });
+        });
+      }
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
             .then((reg) => {
+              try { reg.update(); } catch(e) {}
               console.log('[PWA] Service Worker aktif:', reg.scope);
               reg.addEventListener('updatefound', () => {
                 const newWorker = reg.installing;
                 if (newWorker) {
                   newWorker.addEventListener('statechange', () => {
-                    if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                      console.log('[PWA] Versi baru terdeteksi, memperbarui cache...');
+                    if (newWorker.state === 'installed') {
+                      console.log('[PWA] Versi baru terpasang.');
                       newWorker.postMessage({ type: 'SKIP_WAITING' });
                     }
                   });

@@ -1,5 +1,5 @@
-// AgriConnect Production Service Worker (PWA v2)
-const CACHE_NAME = 'agriconnect-v2-live';
+// AgriConnect Production Service Worker (PWA v5 - Scroll Fixed)
+const CACHE_NAME = 'agriconnect-v5-scrollfix';
 
 const STATIC_ASSETS = [
   '/',
