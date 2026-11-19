@@ -21,7 +21,6 @@ import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -30,7 +29,6 @@ public class MainActivity extends AppCompatActivity {
 
     private WebView webView;
     private ProgressBar progressBar;
-    private SwipeRefreshLayout swipeRefresh;
 
     // File Chooser untuk upload foto produk / avatar
     private ValueCallback<Uri[]> fileUploadCallback;
@@ -44,7 +42,6 @@ public class MainActivity extends AppCompatActivity {
 
         webView = findViewById(R.id.webView);
         progressBar = findViewById(R.id.progressBar);
-        swipeRefresh = findViewById(R.id.swipeRefresh);
 
         // Registrasi Activity Result Launcher untuk File Chooser / Kamera
         fileChooserLauncher = registerForActivityResult(
@@ -88,11 +85,8 @@ public class MainActivity extends AppCompatActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        // 3. Swipe to Refresh (Dinonaktifkan agar scroll atas-bawah WebView 100% mulus tanpa interupsi gesture)
-        swipeRefresh.setEnabled(false);
-
-        // Pastikan WebView merespons scroll dengan sangat mulus dan native
-        webView.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+        // 3. Konfigurasi Scroll WebView (Mulus, native, tanpa overscroll bounce reload)
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setVerticalScrollBarEnabled(true);
         webView.setHorizontalScrollBarEnabled(false);
 
@@ -127,13 +121,11 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progressBar.setVisibility(View.GONE);
-                swipeRefresh.setRefreshing(false);
             }
 
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
                 progressBar.setVisibility(View.GONE);
-                swipeRefresh.setRefreshing(false);
             }
         });
 
