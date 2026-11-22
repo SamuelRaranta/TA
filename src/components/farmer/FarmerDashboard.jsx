@@ -317,11 +317,16 @@ export default function FarmerDashboard({
           fetchTransactionsFromSupabase({ farmerId: activeUserId })
         ]);
 
-        setOffers(offersRes?.data || []);
-        setBindingAgreements(contractsRes?.data || []);
-        // Enrichment: nama + foto pembeli dari profiles (transactions hanya simpan buyer_id).
+        const rawOffers = offersRes?.data || [];
         const rawTrxs = trxsRes?.data || [];
-        const buyerIds = [...new Set(rawTrxs.map(t => t.buyerId).filter(Boolean))];
+        setBindingAgreements(contractsRes?.data || []);
+
+        // Enrichment: nama + foto profil asli pembeli dari profiles untuk transactions dan offers
+        const buyerIds = [...new Set([
+          ...rawTrxs.map(t => t.buyerId),
+          ...rawOffers.map(o => o.buyerId)
+        ].filter(Boolean))];
+
         let buyerMap = {};
         if (buyerIds.length > 0) {
           try {
@@ -334,6 +339,13 @@ export default function FarmerDashboard({
             console.warn('[FarmerDashboard] Gagal memuat profil pembeli:', e);
           }
         }
+
+        setOffers(rawOffers.map(o => ({
+          ...o,
+          buyerName: buyerMap[o.buyerId]?.full_name || o.buyerName,
+          buyerAvatar: buyerMap[o.buyerId]?.avatar_url || (o.buyerAvatar && o.buyerAvatar !== DEFAULT_AVATAR ? o.buyerAvatar : null) || null
+        })));
+
         setTransactions(rawTrxs.map(t => ({
           ...t,
           buyerName: buyerMap[t.buyerId]?.full_name || t.buyerName,
@@ -1487,6 +1499,7 @@ export default function FarmerDashboard({
               isLoading={isLoadingData}
               title="Cari Penawaran"
               subtitle="Telusuri seluruh proposal penawaran kebutuhan komoditas yang diajukan oleh pembeli grosir kepada kelompok tani di Minahasa. Tanggapi tawaran dengan menyetujui, menolak, atau mengajukan negosiasi harga dan tonase alternatif."
+              hideCategoryCards={true}
               onAcceptCounterOffer={(offerId, offerData) => {
                 setBuyerOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui' } : o));
                 handleAcceptOffer(offerId, offerData);

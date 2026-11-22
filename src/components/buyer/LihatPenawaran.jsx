@@ -48,7 +48,8 @@ export default function BuyerOffers({
   title = "Daftar Proposal Penawaran",
   subtitle = "Pantau status seluruh proposal penawaran harga dan tonase yang Anda ajukan ke kelompok tani produsen.",
   isFarmerView = false,
-  isLoading = false
+  isLoading = false,
+  hideCategoryCards = false
 }) {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedOfferForDetail, setSelectedOfferForDetail] = useState(null);
@@ -415,48 +416,50 @@ export default function BuyerOffers({
       </div>
 
       {/* ================= 5 BUTTON CARDS BETWEEN HEADER & SEARCH BAR ================= */}
-      <div className="category-summary-cards-grid">
-        {categoryCards.map((card) => {
-          const IconComponent = card.icon;
-          const isActive = selectedCategory !== 'Semua' && selectedCategory === card.categoryValue;
+      {!(hideCategoryCards || isFarmerView || String(title || '').toLowerCase().includes('cari penawaran')) && (
+        <div className="category-summary-cards-grid">
+          {categoryCards.map((card) => {
+            const IconComponent = card.icon;
+            const isActive = selectedCategory !== 'Semua' && selectedCategory === card.categoryValue;
 
-          return (
-            <button
-              key={card.id}
-              type="button"
-              className={`category-summary-card ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                if (card.categoryValue === 'Semua') {
-                  setSelectedCategory('Semua');
-                } else {
-                  setSelectedCategory(selectedCategory === card.categoryValue ? 'Semua' : card.categoryValue);
-                }
-              }}
-              title={`Filter berdasarkan ${card.name}`}
-            >
-              <div 
-                className="category-card-icon-wrap"
-                style={{ background: card.iconBg, color: card.iconColor }}
+            return (
+              <button
+                key={card.id}
+                type="button"
+                className={`category-summary-card ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  if (card.categoryValue === 'Semua') {
+                    setSelectedCategory('Semua');
+                  } else {
+                    setSelectedCategory(selectedCategory === card.categoryValue ? 'Semua' : card.categoryValue);
+                  }
+                }}
+                title={`Filter berdasarkan ${card.name}`}
               >
-                <IconComponent size={18} weight={isActive ? 'fill' : 'bold'} />
-              </div>
-              <div className="category-card-text-wrap">
-                <div className="category-card-count">
-                  {isLoading ? (
-                    <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '28px', height: '18px', borderRadius: '4px' }} />
-                  ) : (
-                    <span>{card.count}</span>
-                  )}
-                  <span className="category-card-count-unit">Penawaran</span>
+                <div 
+                  className="category-card-icon-wrap"
+                  style={{ background: card.iconBg, color: card.iconColor }}
+                >
+                  <IconComponent size={18} weight={isActive ? 'fill' : 'bold'} />
                 </div>
-                <div className="category-card-name" title={card.name}>
-                  {card.name}
+                <div className="category-card-text-wrap">
+                  <div className="category-card-count">
+                    {isLoading ? (
+                      <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '28px', height: '18px', borderRadius: '4px' }} />
+                    ) : (
+                      <span>{card.count}</span>
+                    )}
+                    <span className="category-card-count-unit">Penawaran</span>
+                  </div>
+                  <div className="category-card-name" title={card.name}>
+                    {card.name}
+                  </div>
                 </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* ================= SEARCH & STATUS FILTER BAR ================= */}
       <div className="farmer-filter-bar" style={{ marginBottom: '1.25rem' }}>

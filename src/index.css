@@ -5261,7 +5261,8 @@ p {
 .clone-offer-avatar-box {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: 50%;
+  object-fit: cover;
   display: flex;
   align-items: center;
   justify-content: center;

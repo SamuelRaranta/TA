@@ -585,48 +585,73 @@ export default function FarmerCloneOverview({
               </button>
             </div>
 
-            {/* List Penawaran Masuk: Logo Profil & Nama Saja */}
+            {/* List Penawaran Masuk: Foto Profil Asli & Nama */}
             <div className="clone-offers-compact-list">
-              {displayOffers.slice(0, 4).map((offer, idx) => {
-                const logoBgs = ['#dbeafe', '#dcfce7', '#fef9c3', '#fae8ff'];
-                const logoColors = ['#1d4ed8', '#15803d', '#a16207', '#86198f'];
-                const shortBuyerName = offer.buyerName
-                  .replace(' Indonesia Tbk', '')
-                  .replace(' Nusantara', '');
-                
-                const initials = shortBuyerName
-                  .replace('PT ', '')
-                  .replace('CV ', '')
-                  .replace('Koperasi ', 'Kop ')
-                  .split(' ')
-                  .map(w => w[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase();
+              {displayOffers.length === 0 ? (
+                <div style={{ padding: '0.85rem 0.25rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.78rem' }}>
+                  Belum ada penawaran masuk
+                </div>
+              ) : (
+                displayOffers.slice(0, 4).map((offer, idx) => {
+                  const logoBgs = ['#dbeafe', '#dcfce7', '#fef9c3', '#fae8ff'];
+                  const logoColors = ['#1d4ed8', '#15803d', '#a16207', '#86198f'];
+                  const shortBuyerName = (offer.buyerName || 'Pembeli')
+                    .replace(' Indonesia Tbk', '')
+                    .replace(' Nusantara', '');
+                  
+                  const initials = shortBuyerName
+                    .replace('PT ', '')
+                    .replace('CV ', '')
+                    .replace('Koperasi ', 'Kop ')
+                    .split(' ')
+                    .map(w => w[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase();
 
-                return (
-                  <div 
-                    key={offer.id} 
-                    className="clone-offer-compact-item"
-                    onClick={() => onNavigate && onNavigate('penawaran')}
-                    style={{ cursor: 'pointer' }}
-                    title={`Penawaran dari ${offer.buyerName}`}
-                  >
+                  const avatarSrc = offer.buyerAvatar && offer.buyerAvatar !== DEFAULT_AVATAR
+                    ? offer.buyerAvatar
+                    : null;
+
+                  return (
                     <div 
-                      className="clone-offer-avatar-box"
-                      style={{ 
-                        background: logoBgs[idx % logoBgs.length], 
-                        color: logoColors[idx % logoColors.length] 
-                      }}
+                      key={offer.id} 
+                      className="clone-offer-compact-item"
+                      onClick={() => onNavigate && onNavigate('penawaran')}
+                      style={{ cursor: 'pointer' }}
+                      title={`Penawaran dari ${offer.buyerName || shortBuyerName}`}
                     >
-                      {initials}
+                      {avatarSrc ? (
+                        <img 
+                          src={avatarSrc} 
+                          alt={shortBuyerName}
+                          className="clone-offer-avatar-box"
+                          style={{ objectFit: 'cover', borderRadius: '50%' }}
+                          onError={(e) => { 
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div 
+                        className="clone-offer-avatar-box"
+                        style={{ 
+                          background: logoBgs[idx % logoBgs.length], 
+                          color: logoColors[idx % logoColors.length],
+                          borderRadius: '50%',
+                          display: avatarSrc ? 'none' : 'flex'
+                        }}
+                      >
+                        {initials}
+                      </div>
+                      <div className="clone-offer-compact-name">
+                        {shortBuyerName}
+                      </div>
                     </div>
-                    <div className="clone-offer-compact-name">
-                      {shortBuyerName}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
 

@@ -120,51 +120,6 @@ export default function FarmerProducts({
     }
   }, [initialModalOpen]);
 
-  // 4 Summary Metrics: Total Komoditas, Aktif, Tidak Aktif, Menunggu Persetujuan (Desain seperti Gambar 3)
-  const totalCount = productList.length;
-  const activeCount = productList.filter(p => normalizeProductStatus(p.status) === 'Aktif').length;
-  const inactiveCount = productList.filter(p => normalizeProductStatus(p.status) === 'Tidak Aktif').length;
-  const pendingCount = productList.filter(p => normalizeProductStatus(p.status) === 'Menunggu Persetujuan').length;
-
-  const summaryCards = [
-    {
-      id: 'semua',
-      name: 'Total Komoditas',
-      count: totalCount,
-      filterValue: 'Semua',
-      icon: Package,
-      iconColor: '#5452f6',
-      iconBg: 'rgba(84, 82, 246, 0.12)'
-    },
-    {
-      id: 'aktif',
-      name: 'Aktif',
-      count: activeCount,
-      filterValue: 'Aktif',
-      icon: CheckCircle,
-      iconColor: '#10b981',
-      iconBg: 'rgba(16, 185, 129, 0.12)'
-    },
-    {
-      id: 'tidak-aktif',
-      name: 'Tidak Aktif',
-      count: inactiveCount,
-      filterValue: 'Tidak Aktif',
-      icon: XCircle,
-      iconColor: '#ef4444',
-      iconBg: 'rgba(239, 68, 68, 0.1)'
-    },
-    {
-      id: 'menunggu',
-      name: 'Menunggu Persetujuan',
-      count: pendingCount,
-      filterValue: 'Menunggu Persetujuan',
-      icon: Clock,
-      iconColor: '#f59e0b',
-      iconBg: 'rgba(245, 158, 11, 0.12)'
-    }
-  ];
-
   // Filter & Sort Logic
   const filteredProducts = useMemo(() => {
     let list = productList.filter((item) => {
@@ -402,51 +357,7 @@ export default function FarmerProducts({
         </div>
       </div>
 
-      {/* ================= 2. 4 SUMMARY CARDS (DESAIN SEPERTI GAMBAR 3) ================= */}
-      <div className="category-summary-cards-grid admin-summary-grid" style={{ marginBottom: '1.25rem' }}>
-        {summaryCards.map((card) => {
-          const IconComponent = card.icon;
-          const isActive = statusFilter === card.filterValue;
-
-          return (
-            <button
-              key={card.id}
-              type="button"
-              className={`category-summary-card ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                if (card.filterValue === 'Semua') {
-                  setStatusFilter('Semua');
-                } else {
-                  setStatusFilter(statusFilter === card.filterValue ? 'Semua' : card.filterValue);
-                }
-              }}
-              title={`Filter berdasarkan ${card.name}`}
-            >
-              <div 
-                className="category-card-icon-wrap"
-                style={{ background: card.iconBg, color: card.iconColor }}
-              >
-                <IconComponent size={18} weight={isActive ? 'fill' : 'bold'} />
-              </div>
-              <div className="category-card-text-wrap">
-                <div className="category-card-count">
-                  {isLoading ? (
-                    <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '28px', height: '18px', borderRadius: '4px' }} />
-                  ) : (
-                    <span>{card.count}</span>
-                  )}
-                  <span className="category-card-count-unit">Komoditas</span>
-                </div>
-                <div className="category-card-name" title={card.name}>
-                  {card.name}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ================= 3. SEARCH DAN FILTER ================= */}
+      {/* ================= 2. SEARCH DAN FILTER ================= */}
       <div className="proposal-filter-bar">
         
         {/* Search Bar */}
