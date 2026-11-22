@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MagnifyingGlass,
   Plus,
@@ -36,6 +36,12 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 
 
+const CHAT_EMOJIS = [
+  '😊', '😄', '😃', '👍', '🙏', '👏', '❤️', '🤝', '👌', '😎',
+  '🌱', '🌾', '🌽', '🥔', '🥕', '🍅', '🌶️', '🥬', '🍎', '🧅',
+  '📦', '🚚', '💰', '💵', '📈', '📄', '📑', '⚖️', '✅', '✨'
+];
+
 export default function FarmerChatView({ currentUserId: propUserId, currentUserProfile: propProfile }) {
   // Tanpa seed fallback: null = belum ada sesi, jangan tampilkan chat user lain.
   const [currentUserId, setCurrentUserId] = useState(() => propUserId || null);
@@ -47,6 +53,50 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
   const [messages, setMessages] = useState({});
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Attachment & Emoji Picker States & Refs
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const docInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showEmojiPicker]);
+
+  // Handler for file attachments
+  const handleFileSelect = (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast('Ukuran file maksimal 5 MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSelectedAttachment({
+        name: file.name,
+        type: type === 'image' || file.type.startsWith('image/') ? 'image' : (type === 'document' ? 'document' : 'file'),
+        url: event.target.result,
+        size: (file.size / 1024).toFixed(0) + ' KB'
+      });
+      triggerToast(`Berkas "${file.name}" siap dikirim.`);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Add Friend Modal State
   const [showAddFriendModal, setShowAddFriendModal] = useState(false);
@@ -125,6 +175,9 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
         id: newMsgRow.id,
         sender: newMsgRow.sender_id === currentUserId ? 'me' : 'them',
         text: newMsgRow.message,
+        attachmentUrl: newMsgRow.attachment_url,
+        attachmentType: newMsgRow.attachment_type,
+        attachmentName: newMsgRow.attachment_name,
         time: new Date(newMsgRow.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
         status: newMsgRow.is_read ? 'read' : 'sent',
         createdAt: newMsgRow.created_at
@@ -249,19 +302,26 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
     );
   };
 
-  // Send message to Supabase
+  // Send message to Supabase (mendukung teks dan lampiran foto/dokumen)
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || !activeChat) return;
+    if ((!inputText.trim() && !selectedAttachment) || !activeChat) return;
 
     const textToSend = inputText.trim();
+    const attachmentToSend = selectedAttachment;
     setInputText('');
+    setSelectedAttachment(null);
+    setShowEmojiPicker(false);
 
     const tempId = `temp-${Date.now()}`;
+    const previewText = textToSend || (attachmentToSend?.type === 'image' ? '[Foto]' : `[Berkas: ${attachmentToSend?.name || 'Dokumen'}]`);
     const newMsg = {
       id: tempId,
       sender: 'me',
       text: textToSend,
+      attachmentUrl: attachmentToSend?.url || null,
+      attachmentType: attachmentToSend?.type || null,
+      attachmentName: attachmentToSend?.name || null,
       time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       status: 'sent'
     };
@@ -274,7 +334,7 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
     setChats((prev) =>
       prev.map((c) =>
         c.id === activeChat.id
-          ? { ...c, lastMessage: `Anda: ${textToSend}`, time: 'Baru saja' }
+          ? { ...c, lastMessage: `Anda: ${previewText}`, time: 'Baru saja' }
           : c
       )
     );
@@ -283,7 +343,10 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
       const res = await sendChatMessage({
         senderId: currentUserId,
         receiverId: activeChat.id,
-        text: textToSend
+        text: textToSend,
+        attachmentUrl: attachmentToSend?.url || null,
+        attachmentType: attachmentToSend?.type || null,
+        attachmentName: attachmentToSend?.name || null
       });
       if (res?.data) {
         setMessages(prev => ({
@@ -610,7 +673,32 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
                       className={`clone-chat-bubble-row ${isMe ? 'sent' : 'received'}`}
                     >
                       <div className={`clone-chat-bubble ${isMe ? 'sent' : 'received'}`}>
-                        <p className="clone-chat-bubble-text">{msg.text}</p>
+                        {msg.attachmentUrl && (
+                          <div style={{ marginBottom: msg.text ? '8px' : '0' }}>
+                            {msg.attachmentType === 'image' || (typeof msg.attachmentUrl === 'string' && msg.attachmentUrl.startsWith('data:image')) ? (
+                              <img 
+                                src={msg.attachmentUrl} 
+                                alt="Lampiran Foto" 
+                                style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', cursor: 'pointer', display: 'block' }}
+                                onClick={() => window.open(msg.attachmentUrl, '_blank')}
+                              />
+                            ) : (
+                              <a 
+                                href={msg.attachmentUrl} 
+                                download={msg.attachmentName || 'dokumen-agriconnect'}
+                                target="_blank" 
+                                rel="noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}
+                              >
+                                <FileText size={18} weight="duotone" />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, wordBreak: 'break-all' }}>
+                                  {msg.attachmentName || 'Unduh Berkas Lampiran'}
+                                </span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        {msg.text && <p className="clone-chat-bubble-text">{msg.text}</p>}
                         <div className="clone-chat-bubble-meta">
                           <span>{msg.time}</span>
                           {isMe && <Checks size={13} weight="bold" className="clone-bubble-tick" />}
@@ -623,6 +711,33 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
 
               {/* Message Input Box (Ultra Compact) */}
               <div className="clone-chat-input-area">
+                {/* Preview Lampiran Sebelum Dikirim */}
+                {selectedAttachment && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-canvas-subtle, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border-subtle, #e2e8f0)', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      {selectedAttachment.type === 'image' ? (
+                        <img src={selectedAttachment.url} alt="Preview" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                      ) : (
+                        <FileText size={20} color="#2563eb" weight="duotone" />
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedAttachment.name}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{selectedAttachment.size}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAttachment(null)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                      title="Hapus Lampiran"
+                    >
+                      <X size={14} weight="bold" />
+                    </button>
+                  </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="clone-chat-input-form">
                   <textarea
                     className="clone-chat-textarea"
@@ -639,19 +754,112 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
                   />
 
                   <div className="clone-chat-input-bottom-bar">
-                    <div className="clone-chat-input-tools">
-                      <button type="button" className="clone-chat-tool-btn" title="Lampirkan Dokumen">
+                    <div className="clone-chat-input-tools" style={{ position: 'relative' }}>
+                      {/* Hidden Input Files */}
+                      <input 
+                        type="file" 
+                        ref={docInputRef} 
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'document')} 
+                      />
+                      <input 
+                        type="file" 
+                        ref={imageInputRef} 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'image')} 
+                      />
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        accept="*/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'file')} 
+                      />
+
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Lampirkan Dokumen (.pdf, .doc, .xlsx, .txt)"
+                        onClick={() => docInputRef.current?.click()}
+                      >
                         <FileText size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Kirim Foto/Gambar">
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Kirim Foto/Gambar"
+                        onClick={() => imageInputRef.current?.click()}
+                      >
                         <ImageIcon size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Sisipkan Berkas">
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Sisipkan Berkas Lampiran"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
                         <Paperclip size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Pilih Emoji">
+                      <button 
+                        type="button" 
+                        className={`clone-chat-tool-btn ${showEmojiPicker ? 'active' : ''}`} 
+                        title="Pilih Emoji"
+                        onClick={() => setShowEmojiPicker(prev => !prev)}
+                      >
                         <Smiley size={14} />
                       </button>
+
+                      {/* Popover Emoji Picker */}
+                      {showEmojiPicker && (
+                        <div 
+                          ref={emojiPickerRef}
+                          style={{
+                            position: 'absolute',
+                            bottom: '36px',
+                            left: '0',
+                            background: 'var(--card-bg, #ffffff)',
+                            border: '1px solid var(--border-subtle, #e2e8f0)',
+                            borderRadius: '12px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                            padding: '8px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(6, 1fr)',
+                            gap: '4px',
+                            zIndex: 100,
+                            width: '230px',
+                            maxHeight: '180px',
+                            overflowY: 'auto'
+                          }}
+                        >
+                          {CHAT_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                setInputText(prev => prev + emoji);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '1.25rem',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background 0.15s'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-canvas-subtle, #f1f5f9)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="clone-chat-input-right">
@@ -659,7 +867,7 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
                       <button
                         type="submit"
                         className="clone-chat-send-btn"
-                        disabled={!inputText.trim()}
+                        disabled={!inputText.trim() && !selectedAttachment}
                       >
                         <span>Kirim</span>
                         <ArrowRight size={12} weight="bold" />
@@ -757,9 +965,6 @@ export default function FarmerChatView({ currentUserId: propUserId, currentUserP
                   <img src={user.avatar} alt={user.name} className="clone-modal-user-avatar" />
                   <div className="clone-modal-user-info">
                     <span className="clone-modal-user-name">{user.name}</span>
-                    <span className="clone-modal-user-role-text">
-                      {user.company || (user.role === 'petani' ? 'Petani Produsen' : user.role === 'admin' ? 'Admin Penjamin' : 'Pembeli')} • {user.location}
-                    </span>
                   </div>
 
                   {user.role === 'admin' || user.status === 'connected' || user.status === 'accepted' ? (

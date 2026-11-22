@@ -101,12 +101,21 @@ export const mapRowToOffer = (row) => {
     ? Number(row.commodity.stock_ton)
     : (row.stock_ton ? Number(row.stock_ton) : 0);
 
+  const commImg = row.commodity?.image_url 
+    || row.commodity?.image 
+    || row.commodity_image 
+    || row.image_url 
+    || row.imageUrl 
+    || null;
+
   return {
     id: row.id,
     offerCode: row.offer_code || `OFF-${String(row.id).slice(0, 8).toUpperCase()}`,
     commodityId: row.commodity_id,
     commodityName: row.commodity?.name || row.commodity_name || 'Komoditas Pertanian',
-    commodityImage: row.commodity?.image_url || null,
+    commodityImage: commImg,
+    imageUrl: commImg,
+    image: commImg,
     category: row.commodity?.category || row.category || 'Perkebunan',
     buyerId: row.buyer_id,
     buyerName: row.buyer?.company_name || row.buyer?.full_name || row.buyer_name || 'PT Contoh Nusantara',
@@ -204,6 +213,8 @@ export const fetchOffersFromSupabase = async (options = {}) => {
                 commodityId: c.commodity_id,
                 commodityName: c.commodity_name || c.commodity?.name || 'Komoditas Pertanian',
                 commodityImage: c.commodity?.image_url || null,
+                imageUrl: c.commodity?.image_url || null,
+                image: c.commodity?.image_url || null,
                 category: c.commodity?.category || 'Perkebunan',
                 buyerId: c.buyer_id,
                 buyerName: c.buyer?.company_name || c.buyer?.full_name || c.buyer_company || 'Pembeli Mitra',

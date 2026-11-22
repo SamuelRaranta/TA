@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   PaperPlaneTilt, 
   MagnifyingGlass, 
@@ -32,6 +32,12 @@ import {
 import { supabase } from '../../lib/supabaseClient';
 import { DEFAULT_AVATAR } from '../../lib/constants';
 
+const CHAT_EMOJIS = [
+  '😊', '😄', '😃', '👍', '🙏', '👏', '❤️', '🤝', '👌', '😎',
+  '🌱', '🌾', '🌽', '🥔', '🥕', '🍅', '🌶️', '🥬', '🍎', '🧅',
+  '📦', '🚚', '💰', '💵', '📈', '📄', '📑', '⚖️', '✅', '✨'
+];
+
 export default function AdminChatView({ currentUserId: propUserId, currentUserProfile: propProfile }) {
   // Tanpa seed fallback: null = belum ada sesi, jangan tampilkan chat user lain.
   const [currentUserId, setCurrentUserId] = useState(() => propUserId || null);
@@ -42,6 +48,49 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
   const [activeRoleFilter, setActiveRoleFilter] = useState('semua'); // 'semua' | 'petani' | 'pembeli'
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // Attachment & Emoji Picker States & Refs
+  const [selectedAttachment, setSelectedAttachment] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const docInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const emojiPickerRef = useRef(null);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    if (showEmojiPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showEmojiPicker]);
+
+  // Handler for file attachments
+  const handleFileSelect = (e, type) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file maksimal 5 MB.');
+      e.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setSelectedAttachment({
+        name: file.name,
+        type: type === 'image' || file.type.startsWith('image/') ? 'image' : (type === 'document' ? 'document' : 'file'),
+        url: event.target.result,
+        size: (file.size / 1024).toFixed(0) + ' KB'
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   // Sync propUserId or check Supabase auth
   useEffect(() => {
@@ -87,6 +136,9 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
         id: newMsgRow.id,
         sender: newMsgRow.sender_id === currentUserId ? 'me' : 'them',
         text: newMsgRow.message,
+        attachmentUrl: newMsgRow.attachment_url,
+        attachmentType: newMsgRow.attachment_type,
+        attachmentName: newMsgRow.attachment_name,
         time: new Date(newMsgRow.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
         status: newMsgRow.is_read ? 'read' : 'sent',
         createdAt: newMsgRow.created_at
@@ -163,16 +215,23 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
 
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim() || !activeChat) return;
+    if ((!inputMessage.trim() && !selectedAttachment) || !activeChat) return;
 
     const textToSend = inputMessage.trim();
+    const attachmentToSend = selectedAttachment;
     setInputMessage('');
+    setSelectedAttachment(null);
+    setShowEmojiPicker(false);
 
     const tempId = `temp-${Date.now()}`;
+    const previewText = textToSend || (attachmentToSend?.type === 'image' ? '[Foto]' : `[Berkas: ${attachmentToSend?.name || 'Dokumen'}]`);
     const newMsg = {
       id: tempId,
       sender: 'me',
       text: textToSend,
+      attachmentUrl: attachmentToSend?.url || null,
+      attachmentType: attachmentToSend?.type || null,
+      attachmentName: attachmentToSend?.name || null,
       time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
       status: 'sent'
     };
@@ -186,7 +245,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
       if (c.id === activeChat.id) {
         return {
           ...c,
-          lastMessage: `Anda: ${textToSend}`,
+          lastMessage: `Anda: ${previewText}`,
           time: 'Baru saja'
         };
       }
@@ -197,7 +256,10 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
       const res = await sendChatMessage({
         senderId: currentUserId,
         receiverId: activeChat.id,
-        text: textToSend
+        text: textToSend,
+        attachmentUrl: attachmentToSend?.url || null,
+        attachmentType: attachmentToSend?.type || null,
+        attachmentName: attachmentToSend?.name || null
       });
       if (res?.data) {
         setMessages(prev => ({
@@ -371,7 +433,32 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
                       className={`clone-chat-bubble-row ${isMe ? 'sent' : 'received'}`}
                     >
                       <div className={`clone-chat-bubble ${isMe ? 'sent' : 'received'}`}>
-                        <p className="clone-chat-bubble-text">{m.text}</p>
+                        {m.attachmentUrl && (
+                          <div style={{ marginBottom: m.text ? '8px' : '0' }}>
+                            {m.attachmentType === 'image' || (typeof m.attachmentUrl === 'string' && m.attachmentUrl.startsWith('data:image')) ? (
+                              <img 
+                                src={m.attachmentUrl} 
+                                alt="Lampiran Foto" 
+                                style={{ maxWidth: '100%', maxHeight: '220px', borderRadius: '8px', cursor: 'pointer', display: 'block' }}
+                                onClick={() => window.open(m.attachmentUrl, '_blank')}
+                              />
+                            ) : (
+                              <a 
+                                href={m.attachmentUrl} 
+                                download={m.attachmentName || 'dokumen-agriconnect'}
+                                target="_blank" 
+                                rel="noreferrer"
+                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}
+                              >
+                                <FileText size={18} weight="duotone" />
+                                <span style={{ fontSize: '0.8rem', fontWeight: 600, wordBreak: 'break-all' }}>
+                                  {m.attachmentName || 'Unduh Berkas Lampiran'}
+                                </span>
+                              </a>
+                            )}
+                          </div>
+                        )}
+                        {m.text && <p className="clone-chat-bubble-text">{m.text}</p>}
                         <div className="clone-chat-bubble-meta">
                           <span>{m.time}</span>
                           {isMe && <Checks size={13} weight="bold" className="clone-bubble-tick" />}
@@ -384,6 +471,33 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
 
               {/* Message Input Area */}
               <div className="clone-chat-input-area">
+                {/* Preview Lampiran Sebelum Dikirim */}
+                {selectedAttachment && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 12px', background: 'var(--bg-canvas-subtle, #f8fafc)', borderRadius: '8px', border: '1px solid var(--border-subtle, #e2e8f0)', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      {selectedAttachment.type === 'image' ? (
+                        <img src={selectedAttachment.url} alt="Preview" style={{ width: '28px', height: '28px', borderRadius: '4px', objectFit: 'cover' }} />
+                      ) : (
+                        <FileText size={20} color="#2563eb" weight="duotone" />
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {selectedAttachment.name}
+                        </span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{selectedAttachment.size}</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAttachment(null)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: '#ef4444' }}
+                      title="Hapus Lampiran"
+                    >
+                      <X size={14} weight="bold" />
+                    </button>
+                  </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="clone-chat-input-form">
                   <textarea
                     className="clone-chat-textarea"
@@ -400,19 +514,112 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
                   />
 
                   <div className="clone-chat-input-bottom-bar">
-                    <div className="clone-chat-input-tools">
-                      <button type="button" className="clone-chat-tool-btn" title="Lampirkan Dokumen">
+                    <div className="clone-chat-input-tools" style={{ position: 'relative' }}>
+                      {/* Hidden Input Files */}
+                      <input 
+                        type="file" 
+                        ref={docInputRef} 
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'document')} 
+                      />
+                      <input 
+                        type="file" 
+                        ref={imageInputRef} 
+                        accept="image/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'image')} 
+                      />
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        accept="*/*" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => handleFileSelect(e, 'file')} 
+                      />
+
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Lampirkan Dokumen (.pdf, .doc, .xlsx, .txt)"
+                        onClick={() => docInputRef.current?.click()}
+                      >
                         <FileText size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Kirim Foto/Gambar">
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Kirim Foto/Gambar"
+                        onClick={() => imageInputRef.current?.click()}
+                      >
                         <ImageIcon size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Sisipkan Berkas">
+                      <button 
+                        type="button" 
+                        className="clone-chat-tool-btn" 
+                        title="Sisipkan Berkas"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
                         <Paperclip size={14} />
                       </button>
-                      <button type="button" className="clone-chat-tool-btn" title="Pilih Emoji">
+                      <button 
+                        type="button" 
+                        className={`clone-chat-tool-btn ${showEmojiPicker ? 'active' : ''}`} 
+                        title="Pilih Emoji"
+                        onClick={() => setShowEmojiPicker(prev => !prev)}
+                      >
                         <Smiley size={14} />
                       </button>
+
+                      {/* Popover Emoji Picker */}
+                      {showEmojiPicker && (
+                        <div 
+                          ref={emojiPickerRef}
+                          style={{
+                            position: 'absolute',
+                            bottom: '36px',
+                            left: '0',
+                            background: 'var(--card-bg, #ffffff)',
+                            border: '1px solid var(--border-subtle, #e2e8f0)',
+                            borderRadius: '12px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                            padding: '8px',
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(6, 1fr)',
+                            gap: '4px',
+                            zIndex: 100,
+                            width: '230px',
+                            maxHeight: '180px',
+                            overflowY: 'auto'
+                          }}
+                        >
+                          {CHAT_EMOJIS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                setInputMessage(prev => prev + emoji);
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                cursor: 'pointer',
+                                fontSize: '1.25rem',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'background 0.15s'
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-canvas-subtle, #f1f5f9)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="clone-chat-input-right">
@@ -420,7 +627,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
                       <button
                         type="submit"
                         className="clone-chat-send-btn"
-                        disabled={!inputMessage.trim()}
+                        disabled={!inputMessage.trim() && !selectedAttachment}
                       >
                         <span>Kirim</span>
                         <ArrowRight size={12} weight="bold" />

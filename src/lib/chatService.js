@@ -191,6 +191,32 @@ export const fetchUserConversations = async (currentUserId, currentUserRole) => 
     );
   }
 
+  // 1b. Ambil relasi pertemanan / izin obrolan yang sudah berstatus 'accepted'
+  const acceptedPartnerIds = new Set();
+  try {
+    const { data: acceptedReqs } = await supabase
+      .from('chat_requests')
+      .select('sender_id, receiver_id, status')
+      .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+      .eq('status', 'accepted');
+
+    if (acceptedReqs) {
+      acceptedReqs.forEach(r => {
+        const partner = r.sender_id === currentUserId ? r.receiver_id : r.sender_id;
+        if (partner) acceptedPartnerIds.add(partner);
+      });
+    }
+  } catch (err) {
+    console.warn('[chatService] Gagal fetch accepted chat_requests:', err);
+  }
+
+  localFallbackRequests
+    .filter(r => (r.sender_id === currentUserId || r.receiver_id === currentUserId) && r.status === 'accepted')
+    .forEach(r => {
+      const partner = r.sender_id === currentUserId ? r.receiver_id : r.sender_id;
+      if (partner) acceptedPartnerIds.add(partner);
+    });
+
   // 2. Pastikan percakapan dengan Admin selalu memiliki pesan pembuka resmi bagi pengguna baru
   const adminProfile = allProfiles.find(p => p.role === 'admin') || {
     id: DEFAULT_ADMIN_ID,
@@ -218,10 +244,21 @@ export const fetchUserConversations = async (currentUserId, currentUserRole) => 
     }
   }
 
-  // 3. Bangun daftar kontak percakapan untuk semua user aktual di Supabase
+  // 3. Bangun daftar kontak percakapan yang SAH
   const conversations = [];
 
   for (const profile of otherProfiles) {
+    const isAdminConnection = currentUserRole === 'admin' || profile.role === 'admin';
+    const isAcceptedFriend = acceptedPartnerIds.has(profile.id);
+
+    // KETENTUAN UTAMA:
+    // Hanya Admin atau partner yang sudah disetujui izin obrolannya ('accepted')
+    // yang boleh muncul di daftar Chats (sidebar percakapan).
+    // Pengguna yang belum ada pertemanan/izin ('none') atau masih 'pending' TIDAK BOLEH masuk.
+    if (!isAdminConnection && !isAcceptedFriend) {
+      continue;
+    }
+
     // Cari pesan-pesan antara currentUserId & profile.id
     const thread = userMessages.filter(
       m => (m.sender_id === currentUserId && m.receiver_id === profile.id) ||
@@ -290,6 +327,9 @@ export const fetchMessagesBetween = async (user1Id, user2Id) => {
         id: m.id,
         sender: m.sender_id === user1Id ? 'me' : 'them',
         text: m.message,
+        attachmentUrl: m.attachment_url,
+        attachmentType: m.attachment_type,
+        attachmentName: m.attachment_name,
         time: new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
         status: m.is_read ? 'read' : 'sent',
         createdAt: m.created_at
@@ -323,6 +363,9 @@ export const fetchMessagesBetween = async (user1Id, user2Id) => {
     id: m.id,
     sender: m.sender_id === user1Id ? 'me' : 'them',
     text: m.message,
+    attachmentUrl: m.attachment_url,
+    attachmentType: m.attachment_type,
+    attachmentName: m.attachment_name,
     time: new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
     status: m.is_read ? 'read' : 'sent',
     createdAt: m.created_at
@@ -332,13 +375,14 @@ export const fetchMessagesBetween = async (user1Id, user2Id) => {
 /**
  * Mengirim pesan baru dan menyimpannya di Supabase
  */
-export const sendChatMessage = async ({ senderId, receiverId, message, text, attachmentUrl = null }) => {
+export const sendChatMessage = async ({ senderId, receiverId, message, text, attachmentUrl = null, attachmentType = null, attachmentName = null }) => {
   const content = (message || text || '').trim();
   const newRow = {
     sender_id: senderId,
     receiver_id: receiverId,
-    message: content,
+    message: content || (attachmentType === 'image' ? '[Foto]' : attachmentUrl ? '[Dokumen]' : ''),
     attachment_url: attachmentUrl,
+    attachment_type: attachmentType,
     is_read: false
   };
 

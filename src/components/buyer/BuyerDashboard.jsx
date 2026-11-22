@@ -1348,6 +1348,7 @@ export default function BuyerDashboard({
               onNavigate={(tab) => setActiveTab(tab)}
               marketPrices={marketPrices}
               offers={offers}
+              commodities={commodities}
               transactions={transactions}
               proposals={proposals}
               buyerProfile={buyerProfile}

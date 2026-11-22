@@ -36,10 +36,83 @@ function getBezierPath(points) {
   return d;
 }
 
+// Mapping gambar komoditas asli berkualitas tinggi jika proposal/penawaran belum memiliki foto
+const COMMODITY_FALLBACK_IMAGES = {
+  'bawang merah': 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=160&auto=format&fit=crop&q=80',
+  'bawang': 'https://images.unsplash.com/photo-1618512496248-a07fe83aa8cb?w=160&auto=format&fit=crop&q=80',
+  'cengkeh': 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=160&auto=format&fit=crop&q=80',
+  'beras': 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=160&auto=format&fit=crop&q=80',
+  'padi': 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=160&auto=format&fit=crop&q=80',
+  'cabai': 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=160&auto=format&fit=crop&q=80',
+  'cabe': 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=160&auto=format&fit=crop&q=80',
+  'rica': 'https://images.unsplash.com/photo-1588252303782-cb80119abd6d?w=160&auto=format&fit=crop&q=80',
+  'tomat': 'https://images.unsplash.com/photo-1592924357228-91a4daadcfea?w=160&auto=format&fit=crop&q=80',
+  'jagung': 'https://images.unsplash.com/photo-1551754655-cd27e38d2076?w=160&auto=format&fit=crop&q=80',
+  'kentang': 'https://images.unsplash.com/photo-1518977676601-b53f82aba655?w=160&auto=format&fit=crop&q=80',
+  'kopi': 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=160&auto=format&fit=crop&q=80',
+  'kelapa': 'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=160&auto=format&fit=crop&q=80',
+  'kopra': 'https://images.unsplash.com/photo-1589182373726-e4f658ab50f0?w=160&auto=format&fit=crop&q=80',
+  'wortel': 'https://images.unsplash.com/photo-1598170845058-32b9d6a5da37?w=160&auto=format&fit=crop&q=80',
+  'jahe': 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=160&auto=format&fit=crop&q=80',
+  'bawang putih': 'https://images.unsplash.com/photo-1615477017267-3a1b52e008aa?w=160&auto=format&fit=crop&q=80',
+  'vanili': 'https://images.unsplash.com/photo-1608797178974-15b35a61dd78?w=160&auto=format&fit=crop&q=80',
+  'pala': 'https://images.unsplash.com/photo-1596040033229-a9821ebd058d?w=160&auto=format&fit=crop&q=80'
+};
+
+const resolveCommodityImage = (offer, commodities = []) => {
+  if (!offer) return null;
+
+  // 1. Gambar langsung dari penawaran / komoditas relasi
+  const directImg = offer.commodityImage 
+    || offer.commodity?.image_url 
+    || offer.commodity?.image 
+    || offer.imageUrl 
+    || offer.image 
+    || offer.image_url;
+
+  const commodityName = (offer.commodityName || '').toLowerCase().trim();
+  const isGenericPlaceholder = typeof directImg === 'string' && directImg.includes('1592924357228-91a4daadcfea');
+  const isActuallyTomato = commodityName.includes('tomat');
+
+  // Jika directImg bukan placeholder generik, atau nama komoditas memang tomat, gunakan directImg
+  if (directImg && (!isGenericPlaceholder || isActuallyTomato)) {
+    return directImg;
+  }
+
+  // 2. Cari di daftar komoditas database yang ada di aplikasi
+  if (Array.isArray(commodities) && commodities.length > 0) {
+    const matched = commodities.find(c => {
+      if (!c) return false;
+      const cId = c.id || c.dbId;
+      const oCommId = offer.commodityId || offer.commodity_id;
+      if (oCommId && cId && String(oCommId) === String(cId)) return true;
+      const cName = (c.name || c.commodityName || '').toLowerCase().trim();
+      if (cName && commodityName && (cName === commodityName || commodityName.includes(cName) || cName.includes(commodityName))) {
+        return true;
+      }
+      return false;
+    });
+
+    const matchedImg = matched?.image_url || matched?.imageUrl || matched?.image;
+    if (matchedImg) return matchedImg;
+  }
+
+  // 3. Fallback cerdas berdasarkan kata kunci nama komoditas
+  for (const [key, fallbackUrl] of Object.entries(COMMODITY_FALLBACK_IMAGES)) {
+    if (commodityName.includes(key)) {
+      return fallbackUrl;
+    }
+  }
+
+  // 4. Default foto hasil panen pertanian berkualitas tinggi
+  return directImg || 'https://images.unsplash.com/photo-1574943320219-553eb213f72d?w=160&auto=format&fit=crop&q=80';
+};
+
 export default function BuyerCloneOverview({ 
   onNavigate, 
   marketPrices = [], 
   offers = [], 
+  commodities = [],
   transactions = [],
   proposals = [],
   buyerProfile = null,
@@ -640,6 +713,7 @@ export default function BuyerCloneOverview({
                   const isApproved = offer.status === 'Disetujui';
 
                   const price = offer.offeredPricePerKg || offer.pricePerKg || 0;
+                  const commodityImg = resolveCommodityImage(offer, commodities);
 
                   return (
                     <div 
@@ -662,20 +736,50 @@ export default function BuyerCloneOverview({
                       <div 
                         className="clone-offer-avatar-box"
                         style={{ 
-                          background: logoBgs[idx % logoBgs.length], 
-                          color: logoColors[idx % logoColors.length],
-                          width: '32px',
-                          height: '32px',
+                          width: '34px',
+                          height: '34px',
                           borderRadius: '8px',
-                          fontSize: '0.74rem',
-                          fontWeight: 700,
                           flexShrink: 0,
+                          overflow: 'hidden',
+                          position: 'relative',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center'
+                          justifyContent: 'center',
+                          background: logoBgs[idx % logoBgs.length], 
+                          color: logoColors[idx % logoColors.length],
+                          border: '1px solid var(--border-subtle, #e2e8f0)',
+                          fontSize: '0.74rem',
+                          fontWeight: 700
                         }}
                       >
-                        {initials}
+                        {commodityImg ? (
+                          <img 
+                            src={commodityImg} 
+                            alt={offer.commodityName || 'Komoditas'}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block'
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.nextElementSibling;
+                              if (fallback) fallback.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <span 
+                          style={{ 
+                            display: commodityImg ? 'none' : 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            height: '100%'
+                          }}
+                        >
+                          {initials}
+                        </span>
                       </div>
                       <div className="clone-offer-compact-name" style={{ flex: 1, minWidth: 0 }}>
                         <div 
