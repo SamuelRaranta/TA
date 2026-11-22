@@ -17092,3 +17092,10 @@ p {
     display: none !important;
   }
 }
+
+/* Sembunyikan tautan unduh APK di footer pada perangkat / tampilan mobile */
+@media (max-width: 768px) {
+  .desktop-only-footer-link {
+    display: none !important;
+  }
+}

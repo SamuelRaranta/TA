@@ -13,10 +13,11 @@ export const checkIsMobileApp = () => {
     || window.navigator.standalone === true 
     || document.referrer.includes('android-app://');
 
-  // 2. Android WebView wrapper (aplikasi buatan Android Studio)
-  const isWebView = /wv|Android.*Version\/[\d.]+.*Chrome\/[\d.]+/i.test(navigator.userAgent)
+  // 2. Android WebView wrapper (aplikasi buatan Android Studio) & Native App flag
+  const isWebView = /wv|WebView|Android.*Version\/[\d.]+/i.test(navigator.userAgent)
     || window.AndroidApp !== undefined
-    || window.isNativeApp === true;
+    || window.isNativeApp === true
+    || window.AgriConnectNative !== undefined;
 
   return isStandalone || isWebView;
 };

@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { 
   Plant, 
-  ArrowRight,
-  List,
-  X,
-  CaretDown,
-  Sun,
-  Moon,
-  Buildings,
-  ShieldCheck,
-  DownloadSimple
+  ArrowRight, 
+  List, 
+  X, 
+  CaretDown, 
+  Sun, 
+  Moon, 
+  Buildings, 
+  ShieldCheck 
 } from '@phosphor-icons/react';
 
 export default function GlassNavbar({ 
@@ -307,31 +306,6 @@ export default function GlassNavbar({
               <ShieldCheck size={18} weight="fill" />
               <span>Buka Dashboard Admin</span>
             </button>
-
-            {/* Unduh Aplikasi Mobile APK */}
-            <a
-              href="/downloads/AgriConnect.apk"
-              download="AgriConnect.apk"
-              onClick={() => setMobileMenuOpen(false)}
-              style={{
-                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                color: '#ffffff',
-                padding: '0.65rem 1rem',
-                borderRadius: '8px',
-                fontSize: '0.92rem',
-                fontWeight: 700,
-                textDecoration: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                width: '100%',
-                boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)'
-              }}
-            >
-              <DownloadSimple size={18} weight="bold" />
-              <span>Unduh Aplikasi Mobile (APK)</span>
-            </a>
 
             {/* Mobile Auth Actions */}
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>

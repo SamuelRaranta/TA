@@ -79,6 +79,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setUserAgentString(settings.getUserAgentString() + " AgriConnectApp/1.0");
 
         // 2. Konfigurasi Cookies
         CookieManager cookieManager = CookieManager.getInstance();

@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plant, Buildings, Envelope, Phone, MapPin, ShieldCheck, DownloadSimple } from '@phosphor-icons/react';
+import { checkIsMobileApp } from './common/AppDownloadPromoCard';
 
 export default function Footer({ 
   onOpenFarmerDashboard, 
   onOpenBuyerDashboard,
   onOpenAdminDashboard 
 }) {
+  const [isMobileApp, setIsMobileApp] = useState(false);
+
+  useEffect(() => {
+    setIsMobileApp(checkIsMobileApp());
+  }, []);
   return (
     <footer style={{
       borderTop: '1px solid var(--border-subtle)',
@@ -140,23 +146,25 @@ export default function Footer({
                   <span>Portal Admin (Ops)</span>
                 </button>
               </li>
-              <li>
-                <a 
-                  href="/downloads/AgriConnect.apk" 
-                  download="AgriConnect.apk"
-                  style={{ 
-                    color: '#0284c7', 
-                    textDecoration: 'none',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <DownloadSimple size={16} color="#0284c7" weight="bold" />
-                  <span>Unduh Aplikasi Mobile (.APK)</span>
-                </a>
-              </li>
+              {!isMobileApp && (
+                <li className="desktop-only-footer-link">
+                  <a 
+                    href="/downloads/AgriConnect.apk" 
+                    download="AgriConnect.apk"
+                    style={{ 
+                      color: '#0284c7', 
+                      textDecoration: 'none',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <DownloadSimple size={16} color="#0284c7" weight="bold" />
+                    <span>Unduh Aplikasi Mobile (.APK)</span>
+                  </a>
+                </li>
+              )}
               <li><a href="#panduan-binding" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Panduan Komitmen Binding</a></li>
               <li><a href="#resolusi-sengketa" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>Mediasi Sengketa Transaksi</a></li>
             </ul>
