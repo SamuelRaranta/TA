@@ -1,5 +1,5 @@
 /**
- * Global Constants for AgriConnect
+ * Global Constants for TaniNiaga
  */
 
 // Default profile avatar (Siluet abu-abu Gambar 2)

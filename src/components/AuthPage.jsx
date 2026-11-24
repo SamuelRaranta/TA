@@ -864,7 +864,7 @@ export default function AuthPage({
               <Plant size={20} weight="fill" color="#ffffff" />
             </div>
             <span className="auth-brand-name">
-              Agri<span style={{ color: 'var(--accent-primary)' }}>Connect</span>
+              Tani<span style={{ color: 'var(--accent-primary)' }}>Niaga</span>
             </span>
           </div>
 
@@ -1353,17 +1353,17 @@ export default function AuthPage({
                             {role === 'petani' ? '💡 Akun Demo Petani: Hengky Mandagi' : '💡 Akun Demo Pembeli: Hendra Pratama'}
                           </span>
                           <span style={{ fontSize: '0.72rem' }}>
-                            {role === 'petani' ? 'petani@agriconnect.id' : 'pembeli@agriconnect.id'}
+                            {role === 'petani' ? 'petani@taniniaga.id' : 'pembeli@taniniaga.id'}
                           </span>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
                             if (role === 'petani') {
-                              setEmail('petani@agriconnect.id');
+                              setEmail('petani@taniniaga.id');
                               setPassword('petani123');
                             } else {
-                              setEmail('pembeli@agriconnect.id');
+                              setEmail('pembeli@taniniaga.id');
                               setPassword('pembeli123');
                             }
                             setErrorMessage('');
@@ -1539,7 +1539,7 @@ export default function AuthPage({
                     {mode === 'login' ? 'Berhasil Masuk!' : 'Registrasi Berhasil!'}
                   </h2>
                   <p className="auth-success-sub">
-                    Selamat datang di platform AgriConnect. Mengarahkan ke dashboard {role}...
+                    Selamat datang di platform TaniNiaga. Mengarahkan ke dashboard {role}...
                   </p>
                 </motion.div>
               )}
@@ -1692,7 +1692,7 @@ export default function AuthPage({
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#1e293b' }}>
-                          {checkResult.full_name || 'Pengguna AgriConnect'}
+                          {checkResult.full_name || 'Pengguna TaniNiaga'}
                         </span>
                         <span style={{ 
                           textTransform: 'uppercase', 
@@ -1731,7 +1731,7 @@ export default function AuthPage({
                           Akun Anda sedang dalam antrean verifikasi KYC. Hubungi admin untuk mempercepat proses persetujuan.
                           <div style={{ marginTop: '10px' }}>
                             <a
-                              href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20sudah%20mendaftar%20dengan%20email%20ini.%20Mohon%20bantu%20verifikasi%20akun%20saya."
+                              href="https://wa.me/6281243218765?text=Halo%20Admin%20TaniNiaga,%20saya%20sudah%20mendaftar%20dengan%20email%20ini.%20Mohon%20bantu%20verifikasi%20akun%20saya."
                               target="_blank"
                               rel="noreferrer"
                               style={{
@@ -1847,7 +1847,7 @@ export default function AuthPage({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* WhatsApp Card */}
                 <a
-                  href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20membutuhkan%20bantuan%20terkait%20akun%20saya."
+                  href="https://wa.me/6281243218765?text=Halo%20Admin%20TaniNiaga,%20saya%20membutuhkan%20bantuan%20terkait%20akun%20saya."
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -1875,7 +1875,7 @@ export default function AuthPage({
 
                 {/* Email Card */}
                 <a
-                  href="mailto:admin@agriconnect.id?subject=Bantuan%20Akun%20AgriConnect"
+                  href="mailto:admin@taniniaga.id?subject=Bantuan%20Akun%20TaniNiaga"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1893,7 +1893,7 @@ export default function AuthPage({
                     <EnvelopeSimple size={22} weight="bold" color="#5452f6" />
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Email Resmi Support</div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>admin@agriconnect.id</div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>admin@taniniaga.id</div>
                     </div>
                   </div>
                   <ArrowSquareOut size={16} weight="bold" />

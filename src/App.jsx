@@ -49,7 +49,7 @@ function ViewLoadingFallback({ message = 'Memuat modul aplikasi...' }) {
           }
         `}</style>
         <div style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.25rem' }}>
-          AgriConnect
+          TaniNiaga
         </div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #64748b)' }}>
           {message}

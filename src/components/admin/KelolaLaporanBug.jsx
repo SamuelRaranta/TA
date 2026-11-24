@@ -50,8 +50,8 @@ export default function KelolaLaporanBug() {
     } catch (e) {}
     return {
       id: null,
-      fullName: 'Admin Utama AgriConnect',
-      email: 'admin@agriconnect.id',
+      fullName: 'Admin Utama TaniNiaga',
+      email: 'admin@taniniaga.id',
       role: 'admin'
     };
   });

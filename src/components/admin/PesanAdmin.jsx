@@ -445,7 +445,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
                             ) : (
                               <a 
                                 href={m.attachmentUrl} 
-                                download={m.attachmentName || 'dokumen-agriconnect'}
+                                download={m.attachmentName || 'dokumen-taniniaga'}
                                 target="_blank" 
                                 rel="noreferrer"
                                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}

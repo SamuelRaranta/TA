@@ -247,8 +247,8 @@ export const createBugReportInSupabase = async (formData, files = []) => {
   const newRecord = {
     report_number: reportNumber,
     user_id: userId,
-    user_name: userName || 'Pengguna AgriConnect',
-    user_email: userEmail || 'user@agriconnect.id',
+    user_name: userName || 'Pengguna TaniNiaga',
+    user_email: userEmail || 'user@taniniaga.id',
     user_role: userRole || 'pembeli',
     category,
     title: title.trim(),

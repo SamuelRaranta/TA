@@ -1,5 +1,5 @@
 /* ==========================================================================
-   AgriConnect Design System — Nexora SaaS with Dual Theme (Light & Dark)
+   TaniNiaga Design System — Nexora SaaS with Dual Theme (Light & Dark)
    Typography: Universal Plus Jakarta Sans consistency with JetBrains Mono data
    ========================================================================== */
 
@@ -1016,7 +1016,7 @@ p {
 }
 
 /* ==========================================================================
-   AgriConnect — Farmer Dashboard (Dashboard Petani) Design System
+   TaniNiaga — Farmer Dashboard (Dashboard Petani) Design System
    ========================================================================== */
 
 .farmer-dashboard-layout {
@@ -11650,6 +11650,17 @@ p {
   gap: 5px;
   min-width: 0;
   flex: 1;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.wholesale-seller-info:hover {
+  opacity: 0.85;
+}
+
+.wholesale-seller-info:hover .wholesale-seller-name {
+  color: #2563eb;
+  text-decoration: underline;
 }
 
 .wholesale-seller-avatar {
@@ -11693,6 +11704,13 @@ p {
   padding: 1px 5px;
   border-radius: 6px;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.wholesale-rating-pill:hover {
+  background: #fde68a;
+  transform: scale(1.05);
 }
 
 /* 10. Main Action Button: "Lihat Detail" */
@@ -11964,6 +11982,10 @@ p {
 
 [data-theme="dark"] .wholesale-seller-name {
   color: #e2e8f0;
+}
+
+[data-theme="dark"] .wholesale-seller-info:hover .wholesale-seller-name {
+  color: #60a5fa;
 }
 
 [data-theme="dark"] .wholesale-detail-btn {
@@ -16120,7 +16142,7 @@ p {
 
 
 /* ==========================================================================
-   AgriConnect — Master Mobile Optimization System (Responsive Enhancement)
+   TaniNiaga — Master Mobile Optimization System (Responsive Enhancement)
    Covers: Landing Page, Dashboards (Petani, Pembeli, Admin), Modals,
    Tables, Typography, Sizing, and Touch-Friendly Controls.
    ========================================================================== */

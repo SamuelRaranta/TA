@@ -270,7 +270,7 @@ export default function PengaturanPengguna({
 
           if (isMounted && data) {
             const resolvedName = data.full_name || '';
-            const resolvedEmail = data.email || authEmail || (role === 'admin' ? 'admin@agriconnect.id' : role === 'pembeli' ? 'pembeli@agriconnect.id' : 'petani@agriconnect.id');
+            const resolvedEmail = data.email || authEmail || (role === 'admin' ? 'admin@taniniaga.id' : role === 'pembeli' ? 'pembeli@taniniaga.id' : 'petani@taniniaga.id');
             const resolvedPhone = data.phone || (role === 'admin' ? '0812-0000-9999' : '0812-4321-8765');
             const resolvedAddress = role === 'admin' ? '' : (data.location || 'Minahasa, Sulawesi Utara');
             const resolvedKabupaten = 'Minahasa';
@@ -850,7 +850,7 @@ export default function PengaturanPengguna({
     } catch (e) {}
 
     localStorage.removeItem('agriconnect_auth_user');
-    alert('Akun Anda telah dinonaktifkan dan dihapus dari sistem AgriConnect.');
+    alert('Akun Anda telah dinonaktifkan dan dihapus dari sistem TaniNiaga.');
     window.location.hash = '';
     window.location.reload();
   };
@@ -1451,7 +1451,7 @@ export default function PengaturanPengguna({
                   <div className="settings-toggle-info">
                     <strong className="settings-toggle-title">Pengumuman Sistem</strong>
                     <p className="settings-toggle-desc">
-                      Informasi pemeliharaan platform, pembaruan regulasi pertanian Minahasa, dan fitur baru AgriConnect.
+                      Informasi pemeliharaan platform, pembaruan regulasi pertanian Minahasa, dan fitur baru TaniNiaga.
                     </p>
                   </div>
                   <label className="settings-switch">
@@ -1488,7 +1488,7 @@ export default function PengaturanPengguna({
             <div className="settings-card-block">
               <h3 className="settings-block-title">Status Akun & Keanggotaan</h3>
               <p className="settings-block-sub">
-                Informasi status verifikasi dan rekam jejak akun Anda di ekosistem resmi AgriConnect.
+                Informasi status verifikasi dan rekam jejak akun Anda di ekosistem resmi TaniNiaga.
               </p>
 
               <div className="settings-account-meta-grid">
@@ -1721,7 +1721,7 @@ export default function PengaturanPengguna({
             <div className="settings-review-header">
               <h3 className="settings-review-title">Review & Rating Pembeli</h3>
               <p className="settings-review-sub">
-                Daftar penilaian kepuasan dan reputasi komoditas Anda dari mitra pembeli yang terverifikasi di AgriConnect.
+                Daftar penilaian kepuasan dan reputasi komoditas Anda dari mitra pembeli yang terverifikasi di TaniNiaga.
               </p>
             </div>
 
@@ -1953,7 +1953,7 @@ export default function PengaturanPengguna({
               <div>
                 <h3 className="settings-modal-title">Konfirmasi Hapus Akun Permanen</h3>
                 <p className="settings-modal-sub">
-                  Perhatian: Seluruh data legalitas, komoditas, dan histori transaksi akun Anda akan dihapus secara permanen dari server AgriConnect.
+                  Perhatian: Seluruh data legalitas, komoditas, dan histori transaksi akun Anda akan dihapus secara permanen dari server TaniNiaga.
                 </p>
               </div>
             </div>

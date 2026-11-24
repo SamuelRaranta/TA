@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AgriConnect"
+rootProject.name = "TaniNiaga"
 include ':app'

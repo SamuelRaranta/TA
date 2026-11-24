@@ -65,7 +65,7 @@ export default function GlassNavbar({
               <Plant size={22} weight="fill" color="#ffffff" />
             </div>
             <div style={{ fontWeight: 800, fontSize: '1.28rem', letterSpacing: '-0.03em' }}>
-              Agri<span style={{ color: 'var(--accent-primary)' }}>Connect</span>
+              Tani<span style={{ color: 'var(--accent-primary)' }}>Niaga</span>
             </div>
           </a>
 

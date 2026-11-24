@@ -1,4 +1,4 @@
-// AgriConnect Production Service Worker (PWA v5 - Scroll Fixed)
+// TaniNiaga Production Service Worker (PWA v5 - Scroll Fixed)
 const CACHE_NAME = 'agriconnect-v5-scrollfix';
 
 const STATIC_ASSETS = [

@@ -90,7 +90,7 @@ export default function AdminVerificationView() {
           let userEmail = item.email;
           if (!userEmail) {
             const cleanSlug = (item.full_name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
-            userEmail = `${cleanSlug || 'pengguna'}@agriconnect.id`;
+            userEmail = `${cleanSlug || 'pengguna'}@taniniaga.id`;
           }
 
           return {
@@ -324,7 +324,7 @@ export default function AdminVerificationView() {
     const newUser = {
       id: generatedUuid,
       name: formName || 'User Baru',
-      email: formEmail || `user${users.length + 1}@agriconnect.id`,
+      email: formEmail || `user${users.length + 1}@taniniaga.id`,
       role: formRole,
       status: formStatus,
       joined: 'Hari ini',

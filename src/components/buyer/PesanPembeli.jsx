@@ -671,7 +671,7 @@ export default function BuyerChatView({ currentUserId: propUserId, currentUserPr
                             ) : (
                               <a 
                                 href={msg.attachmentUrl} 
-                                download={msg.attachmentName || 'dokumen-agriconnect'}
+                                download={msg.attachmentName || 'dokumen-taniniaga'}
                                 target="_blank" 
                                 rel="noreferrer"
                                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}

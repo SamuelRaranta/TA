@@ -1,7 +1,7 @@
 ---
 version: alpha
-name: AgriConnect Design System (Nexora Light SaaS Specification)
-description: Sistem desain antarmuka modern Light SaaS untuk AgriConnect berdasarkan referensi visual Nexora yang sangat presisi, berkontras tinggi, dan bersih.
+name: TaniNiaga Design System (Nexora Light SaaS Specification)
+description: Sistem desain antarmuka modern Light SaaS untuk TaniNiaga berdasarkan referensi visual Nexora yang sangat presisi, berkontras tinggi, dan bersih.
 colors:
   bg-canvas: "#ffffff"
   bg-canvas-subtle: "#f8fafc"

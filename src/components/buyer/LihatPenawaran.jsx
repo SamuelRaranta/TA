@@ -17,10 +17,6 @@ import {
   Receipt,
   Clock,
   Package,
-  Plant,
-  CookingPot,
-  Carrot,
-  CoffeeBean,
   ArrowsClockwise,
   ArrowCounterClockwise,
   Star,
@@ -121,6 +117,23 @@ export default function BuyerOffers({
   const [newOfferedTon, setNewOfferedTon] = useState('');
   const [newNegoNotes, setNewNegoNotes] = useState('');
 
+  // Helper format tanggal bahasa Indonesia yang rapi (menghindari raw ISO timestamp)
+  const formatDateDisplay = (dateVal, fallback = 'Hari Ini') => {
+    if (!dateVal) return fallback;
+    const str = String(dateVal).trim();
+    if (str.toLowerCase() === 'hari ini' || str.toLowerCase() === 'kemarin') return str;
+    if (!str.includes('T') && !str.includes('-') && /^[0-9]{1,2}\s+[a-zA-Z]+\s+[0-9]{4}/.test(str)) {
+      return str;
+    }
+    try {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      }
+    } catch (e) {}
+    return str.replace('Hari Ini, ', '');
+  };
+
   // Helper render badge metode pembayaran (compact micro-badge, label pendek)
   const renderPaymentBadge = (method) => {
     const m = String(method || 'Transfer Bank');
@@ -210,60 +223,6 @@ export default function BuyerOffers({
   };
 
   const statusOptions = ['Semua', 'Menunggu Respon', 'Counter-Offer', 'Disetujui', 'Ditolak'];
-
-  // 5 Category Button Cards configuration between Header and Search Bar (matching BuyerCatalog)
-  const categoryCards = [
-    {
-      id: 'semua',
-      name: 'Jumlah Penawaran',
-      categoryValue: 'Semua',
-      count: offerList.length,
-      icon: Package,
-      iconColor: '#5452f6',
-      iconBg: 'rgba(84, 82, 246, 0.12)',
-      itemsPreview: 'Semua proposal penawaran diajukan'
-    },
-    {
-      id: 'palawija',
-      name: 'Biji-Bijian & Palawija',
-      categoryValue: 'Biji-Bijian & Palawija',
-      count: offerList.filter(o => o.category === 'Biji-Bijian & Palawija').length,
-      icon: Plant,
-      iconColor: '#f59e0b',
-      iconBg: 'rgba(245, 158, 11, 0.12)',
-      itemsPreview: offerList.filter(o => o.category === 'Biji-Bijian & Palawija').map(o => o.commodityName.split(' ')[0]).join(', ') || 'Belum ada penawaran'
-    },
-    {
-      id: 'padi',
-      name: 'Padi & Beras',
-      categoryValue: 'Padi & Beras',
-      count: offerList.filter(o => o.category === 'Padi & Beras').length,
-      icon: CookingPot,
-      iconColor: '#10b981',
-      iconBg: 'rgba(16, 185, 129, 0.12)',
-      itemsPreview: offerList.filter(o => o.category === 'Padi & Beras').map(o => o.commodityName.split(' ')[0]).join(', ') || 'Belum ada penawaran'
-    },
-    {
-      id: 'hortikultura',
-      name: 'Hortikultura & Sayur',
-      categoryValue: 'Hortikultura & Sayur',
-      count: offerList.filter(o => o.category === 'Hortikultura & Sayur').length,
-      icon: Carrot,
-      iconColor: '#ef4444',
-      iconBg: 'rgba(239, 68, 68, 0.12)',
-      itemsPreview: offerList.filter(o => o.category === 'Hortikultura & Sayur').map(o => o.commodityName.split(' ')[0]).join(', ') || 'Belum ada penawaran'
-    },
-    {
-      id: 'perkebunan',
-      name: 'Perkebunan',
-      categoryValue: 'Perkebunan',
-      count: offerList.filter(o => o.category === 'Perkebunan').length,
-      icon: CoffeeBean,
-      iconColor: '#8b5cf6',
-      iconBg: 'rgba(139, 92, 246, 0.12)',
-      itemsPreview: offerList.filter(o => o.category === 'Perkebunan').map(o => o.commodityName.split(' ')[0]).join(', ') || 'Belum ada penawaran'
-    }
-  ];
 
   const [appliedAdvCriteria, setAppliedAdvCriteria] = useState(null);
 
@@ -414,52 +373,6 @@ export default function BuyerOffers({
           </p>
         </div>
       </div>
-
-      {/* ================= 5 BUTTON CARDS BETWEEN HEADER & SEARCH BAR ================= */}
-      {!(hideCategoryCards || isFarmerView || String(title || '').toLowerCase().includes('cari penawaran')) && (
-        <div className="category-summary-cards-grid">
-          {categoryCards.map((card) => {
-            const IconComponent = card.icon;
-            const isActive = selectedCategory !== 'Semua' && selectedCategory === card.categoryValue;
-
-            return (
-              <button
-                key={card.id}
-                type="button"
-                className={`category-summary-card ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  if (card.categoryValue === 'Semua') {
-                    setSelectedCategory('Semua');
-                  } else {
-                    setSelectedCategory(selectedCategory === card.categoryValue ? 'Semua' : card.categoryValue);
-                  }
-                }}
-                title={`Filter berdasarkan ${card.name}`}
-              >
-                <div 
-                  className="category-card-icon-wrap"
-                  style={{ background: card.iconBg, color: card.iconColor }}
-                >
-                  <IconComponent size={18} weight={isActive ? 'fill' : 'bold'} />
-                </div>
-                <div className="category-card-text-wrap">
-                  <div className="category-card-count">
-                    {isLoading ? (
-                      <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '28px', height: '18px', borderRadius: '4px' }} />
-                    ) : (
-                      <span>{card.count}</span>
-                    )}
-                    <span className="category-card-count-unit">Penawaran</span>
-                  </div>
-                  <div className="category-card-name" title={card.name}>
-                    {card.name}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* ================= SEARCH & STATUS FILTER BAR ================= */}
       <div className="farmer-filter-bar" style={{ marginBottom: '1.25rem' }}>
@@ -675,20 +588,20 @@ export default function BuyerOffers({
                 )}
 
                 {/* 7 & 8. Tanggal Diajukan & Masa Berlaku */}
-                <div className="proposal-date-row">
-                  <div className="proposal-date-item" title={`Diajukan pada ${offer.createdAt || offer.submittedDate || 'Hari Ini'}`}>
+                <div className="proposal-date-row" style={{ marginTop: 'auto', paddingTop: '0.28rem' }}>
+                  <div className="proposal-date-item" title={`Diajukan pada ${formatDateDisplay(offer.createdAt || offer.submittedDate)}`}>
                     <CalendarBlank size={12} />
-                    <span>{(offer.createdAt || offer.submittedDate || 'Hari Ini').replace('Hari Ini, ', '')}</span>
+                    <span>{formatDateDisplay(offer.createdAt || offer.submittedDate)}</span>
                   </div>
-                  <div className="proposal-date-item expiry" title={`Berlaku sampai ${offer.validUntil || '30 Sep 2026'}`}>
+                  <div className="proposal-date-item expiry" title={`Berlaku sampai ${formatDateDisplay(offer.validUntil, '30 Sep 2026')}`}>
                     <Clock size={12} />
-                    <span>s/d {offer.validUntil || '30 Sep 2026'}</span>
+                    <span>s/d {formatDateDisplay(offer.validUntil, '30 Sep 2026')}</span>
                   </div>
                 </div>
 
                 {/* Tombol Aksi Petani ("Terima Penawaran") */}
                 {isFarmerView && (
-                  <div className="procurement-card-actions-vertical" style={{ marginTop: 'auto', paddingTop: '0.4rem' }}>
+                  <div className="procurement-card-actions-vertical" style={{ marginTop: '0.4rem', paddingTop: '0.4rem' }}>
                     <button
                       type="button"
                       onClick={() => handleOpenConfirmAccept(offer)}
@@ -719,10 +632,10 @@ export default function BuyerOffers({
                   </div>
                 )}
 
-                {/* Tombol Aksi Pembeli */}
-                {!isFarmerView && (
-                  <div style={{ marginTop: 'auto', paddingTop: '0.5rem' }}>
-                    {statusText === 'Counter-Offer' && (offer.counterBy === 'petani' || !offer.counterBy) ? (
+                {/* Tombol Aksi Pembeli (Hanya jika ada tawaran balik / Counter-Offer dari Petani) */}
+                {!isFarmerView && statusText === 'Counter-Offer' && (
+                  <div style={{ marginTop: '0.4rem', paddingTop: '0.2rem' }}>
+                    {(offer.counterBy === 'petani' || !offer.counterBy) ? (
                       <div style={{ display: 'flex', gap: '5px' }}>
                         <button
                           type="button"
@@ -789,7 +702,7 @@ export default function BuyerOffers({
                           <span>Terima</span>
                         </button>
                       </div>
-                    ) : statusText === 'Counter-Offer' && offer.counterBy === 'pembeli' ? (
+                    ) : (
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
@@ -805,30 +718,7 @@ export default function BuyerOffers({
                         <Clock size={13} weight="bold" />
                         <span>Menunggu Respon Petani</span>
                       </span>
-                    ) : (statusText === 'Disetujui' || statusText === 'Aktif') ? (
-                      <button
-                        type="button"
-                        onClick={() => onProceedToBinding && onProceedToBinding()}
-                        style={{
-                          width: '100%',
-                          padding: '0.38rem 0.65rem',
-                          borderRadius: '7px',
-                          border: '1px solid #10b981',
-                          background: 'rgba(16, 185, 129, 0.1)',
-                          color: '#059669',
-                          fontSize: '0.73rem',
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '5px'
-                        }}
-                      >
-                        <CheckCircle size={14} weight="fill" />
-                        <span>Disetujui • Buka Pembayaran</span>
-                      </button>
-                    ) : null}
+                    )}
                   </div>
                 )}
 

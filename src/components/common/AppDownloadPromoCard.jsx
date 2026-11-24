@@ -17,6 +17,7 @@ export const checkIsMobileApp = () => {
   const isWebView = /wv|WebView|Android.*Version\/[\d.]+/i.test(navigator.userAgent)
     || window.AndroidApp !== undefined
     || window.isNativeApp === true
+    || window.TaniNiagaNative !== undefined
     || window.AgriConnectNative !== undefined;
 
   return isStandalone || isWebView;
@@ -82,18 +83,18 @@ export default function AppDownloadPromoCard({
   // Handler 2: Download Aplikasi APK (Khusus Saat Dibuka di Browser)
   const handleDownloadApp = () => {
     setIsDownloading(true);
-    setFeedbackMsg({ type: 'success', text: 'Memulai unduhan AgriConnect.apk...' });
+    setFeedbackMsg({ type: 'success', text: 'Memulai unduhan TaniNiaga.apk...' });
 
     try {
       const link = document.createElement('a');
-      link.href = '/downloads/AgriConnect.apk';
-      link.setAttribute('download', 'AgriConnect.apk');
+      link.href = '/downloads/TaniNiaga.apk';
+      link.setAttribute('download', 'TaniNiaga.apk');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (err) {
       console.warn('[Download] Fallback link download:', err);
-      window.location.href = '/downloads/AgriConnect.apk';
+      window.location.href = '/downloads/TaniNiaga.apk';
     }
 
     setTimeout(() => {
@@ -112,7 +113,7 @@ export default function AppDownloadPromoCard({
       {/* Icon Badge */}
       <div 
         className="clone-promo-icon-badge sky-badge" 
-        title={isMobileApp ? "Pembaruan Aplikasi AgriConnect" : "AgriConnect Mobile App"}
+        title={isMobileApp ? "Pembaruan Aplikasi TaniNiaga" : "TaniNiaga Mobile App"}
       >
         {isMobileApp ? (
           <ArrowsClockwise 

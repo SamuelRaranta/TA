@@ -986,14 +986,14 @@ export default function FarmerDashboard({
                 setActiveTab('dashboard');
               }
             }}
-            title="AgriConnect Dashboard"
+            title="TaniNiaga Dashboard Petani"
           >
             <div className="clone-brand-icon-box">
               <Plant size={17} weight="fill" color="#ffffff" />
             </div>
             {!isCollapsed && (
               <span className="clone-logo-text">
-                Agri<span style={{ color: '#5452f6' }}>Connect</span>
+                Tani<span style={{ color: '#5452f6' }}>Niaga</span>
               </span>
             )}
           </div>
@@ -1631,7 +1631,7 @@ export default function FarmerDashboard({
               <div style={{ padding: '2.5rem', textAlign: 'center' }}>
                 <CheckCircle size={48} color="#10b981" weight="fill" style={{ margin: '0 auto 1rem' }} />
                 <h4 className="clone-modal-heading" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Laporan Berhasil Terkirim!</h4>
-                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis AgriConnect akan segera meninjau.</p>
+                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis TaniNiaga akan segera meninjau.</p>
               </div>
             ) : (
               <form onSubmit={handleSendBugReport}>

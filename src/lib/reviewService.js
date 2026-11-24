@@ -2,7 +2,7 @@ import { supabase } from './supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
 /**
- * Service untuk mengelola Review & Rating Petani di AgriConnect.
+ * Service untuk mengelola Review & Rating Petani di TaniNiaga.
  * 
  * Aturan Bisnis:
  * 1. Setiap petani memiliki data rating & ulasan yang terisolasi di Supabase.
@@ -63,6 +63,33 @@ const FALLBACK_SEED_REVIEWS = {
       transaction_code: 'TRX-SAM-002',
       rating: 4.8,
       comment: 'Kentang ukuran seragam, kulit bersih tanpa cacat busuk basah. Mitra petani terpercaya di Minahasa Selatan.',
+      created_at: new Date(Date.now() - 2 * 86400000).toISOString()
+    }
+  ],
+  // Akun Pikachu
+  pikachu: [
+    {
+      id: 'rev-pika-1',
+      farmer_id: 'c3333333-3333-3333-3333-333333333333',
+      buyer_id: 'b2222222-2222-2222-2222-222222222222',
+      buyer_name: 'Dimas (PT Royal Agro)',
+      buyer_avatar: DEFAULT_AVATAR,
+      commodity_name: 'Bawang Merah',
+      transaction_code: 'TRX-PIKA-001',
+      rating: 5.0,
+      comment: 'Bawang merah kualitas super, kering sempurna dan aroma tajam. Penimbangan tepat tanpa susut berlebih.',
+      created_at: new Date(Date.now() - 5 * 86400000).toISOString()
+    },
+    {
+      id: 'rev-pika-2',
+      farmer_id: 'c3333333-3333-3333-3333-333333333333',
+      buyer_id: 'b2222222-2222-2222-2222-222222222222',
+      buyer_name: 'CV Agro Sentosa Minahasa',
+      buyer_avatar: DEFAULT_AVATAR,
+      commodity_name: 'Bawang Merah',
+      transaction_code: 'TRX-PIKA-002',
+      rating: 5.0,
+      comment: 'Pelayanan sangat ramah, respon cepat, dan komoditas siap angkut tepat waktu di gudang.',
       created_at: new Date(Date.now() - 2 * 86400000).toISOString()
     }
   ]
@@ -166,6 +193,8 @@ export async function fetchFarmerReviews(farmerId, farmerName = '') {
     seed = FALLBACK_SEED_REVIEWS.yoru;
   } else if (normName.includes('samuel') || farmerId === 'b1ad80e8-1da5-4be1-bff6-35ee468b166f') {
     seed = FALLBACK_SEED_REVIEWS.samuel;
+  } else if (normName.includes('pika') || farmerId === 'c3333333-3333-3333-3333-333333333333') {
+    seed = FALLBACK_SEED_REVIEWS.pikachu;
   } else {
     // Petani baru belum ada rating -> default 5.0 (0 ulasan)
     seed = [];

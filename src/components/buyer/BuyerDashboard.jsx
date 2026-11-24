@@ -314,14 +314,33 @@ export default function BuyerDashboard({
       setProposals(freshProposals);
 
       const dbOffers = offersRes?.data || [];
+      // Halaman "Lihat Penawaran" pembeli menampilkan proposal pengadaan milik pembeli
+      // yang sudah disetujui / diterima oleh admin (status 'Aktif' atau 'Disetujui')
       const mappedProposalOffers = freshProposals
-        .map(mapProposalToOfferItem)
-        .filter(p => p.status === 'Aktif' || p.status === 'Disetujui');
+        .filter(p => p.status === 'Aktif' || p.status === 'Disetujui')
+        .map(p => {
+          const mapped = mapProposalToOfferItem(p);
+          // Sertakan tawaran balik (counter-offer) dari petani jika ada
+          const counterOffer = dbOffers.find(o => 
+            (o.proposalDbId && o.proposalDbId === p.dbId) || 
+            (o.proposalCode && o.proposalCode === p.code) ||
+            (o.commodityId === p.id && o.status === 'Counter-Offer')
+          );
+          if (counterOffer) {
+            return {
+              ...mapped,
+              status: 'Counter-Offer',
+              counterPricePerKg: counterOffer.counterPricePerKg || counterOffer.offeredPricePerKg,
+              counterTon: counterOffer.counterTon || counterOffer.requestedTon,
+              counterNotes: counterOffer.counterNotes || counterOffer.notes,
+              counterBy: counterOffer.counterBy || 'petani',
+              farmerGroup: counterOffer.farmerGroup || counterOffer.farmerName || mapped.farmerGroup
+            };
+          }
+          return mapped;
+        });
 
-      // Combine only fresh database offers + fresh proposal offers, avoiding duplicates
-      const dbOfferIds = new Set(dbOffers.map(o => o.id));
-      const nonDuplicateProposalOffers = mappedProposalOffers.filter(p => !dbOfferIds.has(p.id));
-      setOffers([...dbOffers, ...nonDuplicateProposalOffers]);
+      setOffers(mappedProposalOffers);
 
       setBindingAgreements(contractsRes?.data || []);
 
@@ -379,7 +398,7 @@ export default function BuyerDashboard({
           buyerId: trx.buyerId || null,
           farmerId: trx.farmerId || null,
           accountNumber: `8809-08${idx}1-2294-001`,
-          bankName: 'Bank Mandiri (Platform Escrow AgriConnect)',
+          bankName: 'Bank Mandiri (Platform Escrow TaniNiaga)',
           method: resolvedMethod,
           paidDate: isMidtransPaid
             ? (midtransPaidAt ? new Date(midtransPaidAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terverifikasi')
@@ -881,14 +900,14 @@ export default function BuyerDashboard({
                 setActiveTab('dashboard');
               }
             }}
-            title="AgriConnect Dashboard Pembeli"
+            title="TaniNiaga Dashboard Pembeli"
           >
             <div className="clone-brand-icon-box" style={{ background: 'linear-gradient(135deg, #5452f6 0%, #3b82f6 100%)' }}>
               <Buildings size={17} weight="fill" color="#ffffff" />
             </div>
             {!isCollapsed && (
               <span className="clone-logo-text">
-                Agri<span style={{ color: '#5452f6' }}>Connect</span>
+                Tani<span style={{ color: '#5452f6' }}>Niaga</span>
               </span>
             )}
           </div>
@@ -1528,7 +1547,7 @@ export default function BuyerDashboard({
               <div style={{ padding: '2.5rem', textAlign: 'center' }}>
                 <CheckCircle size={48} color="#10b981" weight="fill" style={{ margin: '0 auto 1rem' }} />
                 <h4 className="clone-modal-heading" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Laporan Berhasil Terkirim!</h4>
-                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis AgriConnect akan segera meninjau.</p>
+                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis TaniNiaga akan segera meninjau.</p>
               </div>
             ) : (
               <form onSubmit={handleSendBugReport}>
