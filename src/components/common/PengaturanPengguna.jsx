@@ -28,11 +28,11 @@ import {
   Quotes,
   Clock,
   XCircle,
-  ArrowClockwise
 } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabaseClient';
 import { DEFAULT_AVATAR } from '../../lib/constants';
 import { fetchFarmerReviews, subscribeFarmerReviews } from '../../lib/reviewService';
+import { appAlert, appConfirm } from '../../lib/appFeedback';
 
 export default function PengaturanPengguna({ 
   role = 'petani', // 'petani' | 'pembeli' | 'admin'
@@ -41,14 +41,18 @@ export default function PengaturanPengguna({
   onUpdateProfile,
   onLogout
 }) {
-  // Tab State: 'edit-profile' | 'security' | 'notifications' | 'account' | 'review' (review hanya untuk petani)
+  // Preferensi notifikasi hanya tersedia untuk pengaturan admin.
   const isReviewAllowed = role === 'petani';
-  const resolvedInitialTab = (initialTab === 'review' && !isReviewAllowed) ? 'edit-profile' : (initialTab || 'edit-profile');
+  const isNotificationsSettingsAllowed = role === 'admin';
+  const isInitialTabUnavailable = (initialTab === 'review' && !isReviewAllowed) ||
+    (initialTab === 'notifications' && !isNotificationsSettingsAllowed);
+  const resolvedInitialTab = isInitialTabUnavailable ? 'edit-profile' : (initialTab || 'edit-profile');
   const [activeTab, setActiveTab] = useState(resolvedInitialTab);
 
   useEffect(() => {
     if (initialTab) {
-      if (initialTab === 'review' && role !== 'petani') {
+      if ((initialTab === 'review' && role !== 'petani') ||
+          (initialTab === 'notifications' && role !== 'admin')) {
         setActiveTab('edit-profile');
       } else {
         setActiveTab(initialTab);
@@ -124,33 +128,6 @@ export default function PengaturanPengguna({
     location: rawProfile?.location || rawProfile?.address || '',
     updatedAt: null
   });
-
-  // State untuk Pembaruan Aplikasi Realtime
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateSuccessMsg, setUpdateSuccessMsg] = useState('');
-
-  const handleCheckUpdate = async () => {
-    setIsCheckingUpdate(true);
-    setUpdateSuccessMsg('');
-    try {
-      if ('caches' in window) {
-        try {
-          const cacheKeys = await window.caches.keys();
-          await Promise.all(cacheKeys.map(k => window.caches.delete(k)));
-        } catch (e) {}
-      }
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setUpdateSuccessMsg('Aplikasi Anda sudah terhubung ke versi terbaru (v1.2.0). Memuat ulang aset...');
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
-    } catch (err) {
-      console.warn('Update check failed:', err);
-      window.location.reload();
-    } finally {
-      setIsCheckingUpdate(false);
-    }
-  };
 
   // Helper memformat tanggal bergabung dinamis ke format Bahasa Indonesia (misal: "19 September 2026")
   const formatJoinDate = (dateVal) => {
@@ -270,7 +247,7 @@ export default function PengaturanPengguna({
 
           if (isMounted && data) {
             const resolvedName = data.full_name || '';
-            const resolvedEmail = data.email || authEmail || (role === 'admin' ? 'admin@taniniaga.id' : role === 'pembeli' ? 'pembeli@taniniaga.id' : 'petani@taniniaga.id');
+            const resolvedEmail = data.email || authEmail || (role === 'admin' ? 'admin@agriconnect.id' : role === 'pembeli' ? 'pembeli@agriconnect.id' : 'petani@agriconnect.id');
             const resolvedPhone = data.phone || (role === 'admin' ? '0812-0000-9999' : '0812-4321-8765');
             const resolvedAddress = role === 'admin' ? '' : (data.location || 'Minahasa, Sulawesi Utara');
             const resolvedKabupaten = 'Minahasa';
@@ -794,7 +771,13 @@ export default function PengaturanPengguna({
 
   // Handle Logout All Devices
   const handleLogoutAllDevices = async () => {
-    if (window.confirm('Keluar dari semua sesi perangkat lain? Anda akan tetap masuk di perangkat ini.')) {
+    const confirmed = await appConfirm({
+      title: 'Keluar dari Perangkat Lain?',
+      message: 'Semua sesi di perangkat lain akan diakhiri. Anda tetap masuk di perangkat ini.',
+      tone: 'warning',
+      confirmLabel: 'Ya, Keluar'
+    });
+    if (confirmed) {
       try {
         await supabase.auth.signOut({ scope: 'others' });
       } catch (e) {}
@@ -822,8 +805,14 @@ export default function PengaturanPengguna({
   };
 
   // Handle Global Logout
-  const handleTriggerLogout = () => {
-    if (window.confirm('Apakah Anda yakin ingin keluar dari akun?')) {
+  const handleTriggerLogout = async () => {
+    const confirmed = await appConfirm({
+      title: 'Keluar dari Akun?',
+      message: 'Anda perlu masuk kembali untuk mengakses dashboard AgriConnect.',
+      tone: 'warning',
+      confirmLabel: 'Ya, Keluar'
+    });
+    if (confirmed) {
       if (onLogout) {
         onLogout();
       } else {
@@ -838,7 +827,12 @@ export default function PengaturanPengguna({
   // Handle Delete Account
   const handleDeleteAccount = async () => {
     if (deleteConfirmText.toLowerCase() !== 'hapus akun') {
-      alert('Ketik "HAPUS AKUN" dengan tepat untuk mengonfirmasi.');
+      appAlert({
+        title: 'Konfirmasi Belum Sesuai',
+        message: 'Ketik "HAPUS AKUN" dengan tepat pada kolom konfirmasi untuk melanjutkan.',
+        tone: 'warning',
+        confirmLabel: 'Saya Mengerti'
+      });
       return;
     }
 
@@ -850,7 +844,12 @@ export default function PengaturanPengguna({
     } catch (e) {}
 
     localStorage.removeItem('agriconnect_auth_user');
-    alert('Akun Anda telah dinonaktifkan dan dihapus dari sistem TaniNiaga.');
+    await appAlert({
+      title: 'Akun Telah Dihapus',
+      message: 'Akun Anda telah dinonaktifkan dan dihapus dari sistem AgriConnect.',
+      tone: 'success',
+      confirmLabel: 'Kembali ke Beranda'
+    });
     window.location.hash = '';
     window.location.reload();
   };
@@ -874,13 +873,15 @@ export default function PengaturanPengguna({
         >
           Password & Keamanan
         </button>
-        <button
-          type="button"
-          className={`settings-tab-btn ${activeTab === 'notifications' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notifications')}
-        >
-          Notifikasi
-        </button>
+        {isNotificationsSettingsAllowed && (
+          <button
+            type="button"
+            className={`settings-tab-btn ${activeTab === 'notifications' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notifications')}
+          >
+            Notifikasi
+          </button>
+        )}
         <button
           type="button"
           className={`settings-tab-btn ${activeTab === 'account' ? 'active' : ''}`}
@@ -1320,7 +1321,7 @@ export default function PengaturanPengguna({
         {/* ======================================================== */}
         {/* TAB 3: NOTIFIKASI                                        */}
         {/* ======================================================== */}
-        {activeTab === 'notifications' && (
+        {isNotificationsSettingsAllowed && activeTab === 'notifications' && (
           <div className="settings-tab-content">
             
             {notifSuccessMsg && (
@@ -1451,7 +1452,7 @@ export default function PengaturanPengguna({
                   <div className="settings-toggle-info">
                     <strong className="settings-toggle-title">Pengumuman Sistem</strong>
                     <p className="settings-toggle-desc">
-                      Informasi pemeliharaan platform, pembaruan regulasi pertanian Minahasa, dan fitur baru TaniNiaga.
+                      Informasi pemeliharaan platform, pembaruan regulasi pertanian Minahasa, dan fitur baru AgriConnect.
                     </p>
                   </div>
                   <label className="settings-switch">
@@ -1488,7 +1489,7 @@ export default function PengaturanPengguna({
             <div className="settings-card-block">
               <h3 className="settings-block-title">Status Akun & Keanggotaan</h3>
               <p className="settings-block-sub">
-                Informasi status verifikasi dan rekam jejak akun Anda di ekosistem resmi TaniNiaga.
+                Informasi status verifikasi dan rekam jejak akun Anda di ekosistem resmi AgriConnect.
               </p>
 
               <div className="settings-account-meta-grid">
@@ -1609,65 +1610,6 @@ export default function PengaturanPengguna({
               </div>
             </div>
 
-            {/* Pembaruan Aplikasi (Otomatis & Realtime via Cloud) */}
-            <div className="settings-card-block" style={{ marginTop: '2rem' }}>
-              {updateSuccessMsg && (
-                <div className="settings-alert-banner success" style={{ marginBottom: '1.25rem' }}>
-                  <CheckCircle size={18} weight="fill" />
-                  <span>{updateSuccessMsg}</span>
-                </div>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
-                <div style={{ maxWidth: '580px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                    <h3 className="settings-block-title" style={{ margin: 0 }}>Versi & Pembaruan Aplikasi</h3>
-                    <span style={{ 
-                      fontSize: '0.74rem', 
-                      fontWeight: 700, 
-                      padding: '2px 8px', 
-                      borderRadius: '9999px', 
-                      background: '#dcfce7', 
-                      color: '#15803d',
-                      border: '1px solid #bbf7d0',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '5px'
-                    }}>
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
-                      Versi Terbaru v1.2.0
-                    </span>
-                  </div>
-                  <p className="settings-block-sub" style={{ margin: 0, lineHeight: 1.5 }}>
-                    Aplikasi mobile Anda terhubung langsung secara real-time ke Vercel Cloud. Setiap perbaikan dan fitur baru otomatis sinkron tanpa perlu kompilasi ulang di Android Studio atau instal ulang file APK.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCheckUpdate}
-                  disabled={isCheckingUpdate}
-                  className="settings-btn-primary"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '0.65rem 1.25rem',
-                    borderRadius: '8px',
-                    background: '#5452f6',
-                    color: '#ffffff',
-                    border: 'none',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: isCheckingUpdate ? 'wait' : 'pointer',
-                    boxShadow: '0 4px 12px rgba(84, 82, 246, 0.25)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  <ArrowClockwise size={17} weight="bold" className={isCheckingUpdate ? 'animate-spin' : ''} />
-                  <span>{isCheckingUpdate ? 'Memeriksa...' : 'Periksa & Muat Pembaruan'}</span>
-                </button>
-              </div>
-            </div>
-
             {/* Logout Section */}
             <div className="settings-card-block" style={{ marginTop: '2rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
@@ -1721,7 +1663,7 @@ export default function PengaturanPengguna({
             <div className="settings-review-header">
               <h3 className="settings-review-title">Review & Rating Pembeli</h3>
               <p className="settings-review-sub">
-                Daftar penilaian kepuasan dan reputasi komoditas Anda dari mitra pembeli yang terverifikasi di TaniNiaga.
+                Daftar penilaian kepuasan dan reputasi komoditas Anda dari mitra pembeli yang terverifikasi di AgriConnect.
               </p>
             </div>
 
@@ -1953,7 +1895,7 @@ export default function PengaturanPengguna({
               <div>
                 <h3 className="settings-modal-title">Konfirmasi Hapus Akun Permanen</h3>
                 <p className="settings-modal-sub">
-                  Perhatian: Seluruh data legalitas, komoditas, dan histori transaksi akun Anda akan dihapus secara permanen dari server TaniNiaga.
+                  Perhatian: Seluruh data legalitas, komoditas, dan histori transaksi akun Anda akan dihapus secara permanen dari server AgriConnect.
                 </p>
               </div>
             </div>

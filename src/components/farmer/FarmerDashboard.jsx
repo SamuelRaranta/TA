@@ -35,9 +35,11 @@ import {
 } from '@phosphor-icons/react';
 import { fetchFarmerReviews, subscribeFarmerReviews } from '../../lib/reviewService';
 import { DEFAULT_AVATAR } from '../../lib/constants';
+import { appAlert } from '../../lib/appFeedback';
 
 import {
   fetchOffersFromSupabase,
+  createOfferInSupabase,
   updateOfferInSupabase,
   fetchContractsFromSupabase,
   createContractInSupabase,
@@ -713,12 +715,18 @@ export default function FarmerDashboard({
   // proposal Disetujui (hilang dari Cari Penawaran) -> kontrak -> transaksi.
   const handleAcceptOffer = async (offerId, explicitOffer = null, switchTab = true) => {
     const targetOffer = explicitOffer || offers.find(o => o.id === offerId) || buyerOffers.find(o => o.id === offerId);
-    if (!targetOffer) return;
+    if (!targetOffer) return false;
     if (!currentFarmerId) {
-      window.alert('Identitas petani tidak ditemukan. Silakan login kembali.');
-      return;
+      appAlert({
+        title: 'Identitas Petani Tidak Ditemukan',
+        message: 'Silakan masuk kembali ke akun petani Anda, lalu coba terima penawaran ini lagi.',
+        tone: 'warning',
+        confirmLabel: 'Mengerti'
+      });
+      return false;
     }
     const isRealOffer = offers.some(o => o.id === offerId);
+    const originalOfferStatus = targetOffer.status || 'Menunggu Respon';
 
     const reqTon = Number(targetOffer.counterTon || targetOffer.requestedTon || (targetOffer.requestedKg ? targetOffer.requestedKg / 1000 : 1));
     const priceKg = Number(targetOffer.counterPricePerKg || targetOffer.offeredPricePerKg || targetOffer.pricePerKg || 0);
@@ -730,8 +738,20 @@ export default function FarmerDashboard({
     let commodityId = isUuidLike(targetOffer.commodityId) ? targetOffer.commodityId : null;
     if (!commodityId) {
       // HANYA dari katalog sendiri (myProducts): jangan kunci stok milik petani lain.
-      const match = (myProducts || []).find(c => normName(c.name) === normName(targetOffer.commodityName));
+      const match = (myProducts || []).find(c =>
+        normName(c.name) === normName(targetOffer.commodityName) &&
+        ['aktif', 'tersedia', 'disetujui'].includes(String(c.status || '').trim().toLowerCase())
+      );
       if (match) commodityId = match.id;
+    }
+    if (!commodityId) {
+      appAlert({
+        title: 'Komoditas Belum Siap Ditawarkan',
+        message: `Komoditas ${targetOffer.commodityName || ''} belum terdaftar dan disetujui di Komoditas Saya. Daftarkan komoditas tersebut terlebih dahulu sebelum menerima penawaran.`,
+        tone: 'warning',
+        confirmLabel: 'Mengerti'
+      });
+      return false;
     }
 
     // Optimistic UI
@@ -741,19 +761,26 @@ export default function FarmerDashboard({
 
     // Rollback stok idempoten (aman dipanggil walau stok tak jadi dikunci).
     let dealOfferId = offerId;
+    let stockLockComplete = false;
+    let offerAcceptedInDb = false;
     const rollbackStock = async () => {
-      await ensureStockRestored(dealOfferId);
+      if (stockLockComplete) return ensureStockRestored(dealOfferId);
+      return { success: true, skipped: true };
     };
 
     try {
       let dealBuyerId = targetOffer.buyerId || null;
 
       if (isRealOffer) {
-        const upd = await updateOfferInSupabase(offerId, { status: 'Disetujui', acceptedAt: new Date().toISOString() });
-        if (!upd.data) throw new Error(upd.error || 'Gagal memperbarui penawaran.');
-        // Kunci stok (lewati bila reservasi saat offer dibuat masih berlaku).
+        // Cadangkan stok saat ini, baru ubah status penawaran. Dengan begitu,
+        // kegagalan cek stok tidak membuat offer tertinggal sebagai Disetujui.
         const lock = await ensureStockReserved(offerId);
         if (!lock.success) throw lock.error || new Error('Gagal mengunci stok komoditas.');
+        stockLockComplete = true;
+
+        const upd = await updateOfferInSupabase(offerId, { status: 'Disetujui', acceptedAt: new Date().toISOString() });
+        if (!upd.data) throw new Error(upd.error || 'Gagal memperbarui penawaran.');
+        offerAcceptedInDb = true;
       } else {
         // Proposal dari Cari Penawaran: buat baris offer real lebih dulu.
         if (!targetOffer.buyerId) {
@@ -776,6 +803,7 @@ export default function FarmerDashboard({
         });
         if (!created.data) throw new Error(created.error || 'Gagal membuat penawaran.');
         dealOfferId = created.data.id;
+        stockLockComplete = Boolean(created.data.stockReserved);
         dealBuyerId = created.data.buyerId || targetOffer.buyerId;
         setOffers(prev => [created.data, ...prev]);
 
@@ -819,7 +847,7 @@ export default function FarmerDashboard({
         buyerName: targetOffer.buyerName,
         tonnage: reqTon,
         pricePerKg: priceKg,
-        totalValue: targetOffer.totalOfferValue || totalVal,
+        totalValue: totalVal,
         pickupSchedule: targetOffer.pickupDate,
         pickupLocation: targetOffer.pickupLocation || targetOffer.location || farmerProfile.location,
         paymentMethod: targetOffer.paymentMethod || 'Pembayaran Langsung'
@@ -835,7 +863,7 @@ export default function FarmerDashboard({
         commodityName: targetOffer.commodityName || targetOffer.productName,
         volumeTon: reqTon,
         category: targetOffer.category,
-        amount: targetOffer.totalOfferValue || totalVal,
+        amount: totalVal,
         status: 'Berjalan',
         pickupSchedule: targetOffer.pickupLocation || targetOffer.location || farmerProfile.location,
         paymentMethod: targetOffer.paymentMethod || 'Pembayaran Langsung',
@@ -851,16 +879,39 @@ export default function FarmerDashboard({
       await loadFarmerCommodities(currentFarmerId);
     } catch (err) {
       console.warn('[FarmerDashboard] Error accepting offer in Supabase:', err);
-      await rollbackStock();
-      if (isRealOffer) {
-        setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Menunggu Respon' } : o));
+      let rollbackIssue = '';
+      if (isRealOffer && offerAcceptedInDb) {
+        const reverted = await updateOfferInSupabase(offerId, {
+          status: originalOfferStatus,
+          acceptedAt: null
+        });
+        if (!reverted.data) {
+          console.warn('[FarmerDashboard] Gagal mengembalikan status penawaran:', reverted.error);
+          rollbackIssue = ` Status penawaran juga gagal dipulihkan: ${reverted.error || 'periksa koneksi dan izin database.'}`;
+        }
       }
-      window.alert(`Gagal memproses penerimaan: ${err?.message || err}`);
-      return;
+      const stockRollback = await rollbackStock();
+      if (stockRollback?.success === false) {
+        console.error('[FarmerDashboard] Gagal memulihkan stok setelah penerimaan gagal:', stockRollback.error);
+        rollbackIssue += ` Stok gagal dipulihkan otomatis: ${stockRollback.error?.message || stockRollback.error || 'periksa izin database.'}`;
+      }
+      if (isRealOffer) {
+        setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: originalOfferStatus } : o));
+      }
+      appAlert({
+        title: String(err?.message || '').toLowerCase().includes('stok')
+          ? 'Stok Tidak Dapat Dikunci'
+          : 'Gagal Memproses Penerimaan',
+        message: `Penawaran belum dapat diterima. ${err?.message || err || 'Silakan coba lagi.'}${rollbackIssue}`,
+        tone: 'error',
+        confirmLabel: 'Tutup'
+      });
+      return false;
     }
     if (switchTab) {
       setActiveTab('transaksi');
     }
+    return true;
   };
 
   const handleRejectOffer = async (offerId, reason = null) => {
@@ -986,14 +1037,14 @@ export default function FarmerDashboard({
                 setActiveTab('dashboard');
               }
             }}
-            title="TaniNiaga Dashboard Petani"
+            title="AgriConnect Dashboard Petani"
           >
             <div className="clone-brand-icon-box">
               <Plant size={17} weight="fill" color="#ffffff" />
             </div>
             {!isCollapsed && (
               <span className="clone-logo-text">
-                Tani<span style={{ color: '#5452f6' }}>Niaga</span>
+                Agri<span style={{ color: '#5452f6' }}>Connect</span>
               </span>
             )}
           </div>
@@ -1483,7 +1534,7 @@ export default function FarmerDashboard({
           {/* TAB 2: LIHAT KOMODITAS (KATALOG SEPERTI CARI KOMODITAS PEMBELI, TANPA TOMBOL TAMBAH) */}
           {activeTab === 'lihat-komoditas' && (
             <CariKomoditas 
-              commodities={catalogProducts.filter(p => p.status === 'Aktif' || p.status === 'Tersedia' || p.status === 'Disetujui')}
+              commodities={catalogProducts.filter((product) => ['aktif', 'tersedia', 'disetujui'].includes(String(product.status || '').trim().toLowerCase()))}
               isFarmerView={true}
               isLoading={isLoadingData}
               title="Lihat Komoditas"
@@ -1498,11 +1549,10 @@ export default function FarmerDashboard({
               isFarmerView={true}
               isLoading={isLoadingData}
               title="Cari Penawaran"
-              subtitle="Telusuri seluruh proposal penawaran kebutuhan komoditas yang diajukan oleh pembeli grosir kepada kelompok tani di Minahasa. Tanggapi tawaran dengan menyetujui, menolak, atau mengajukan negosiasi harga dan tonase alternatif."
+              subtitle="Telusuri proposal kebutuhan komoditas dari pembeli grosir. Periksa harga, volume, dan ketentuannya sebelum menerima penawaran yang sesuai dengan stok Anda."
               hideCategoryCards={true}
               onAcceptCounterOffer={(offerId, offerData) => {
-                setBuyerOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui' } : o));
-                handleAcceptOffer(offerId, offerData);
+                return handleAcceptOffer(offerId, offerData);
               }}
               onCancelOffer={(offerId) => {
                 setBuyerOffers(prev => prev.filter(o => o.id !== offerId));
@@ -1631,7 +1681,7 @@ export default function FarmerDashboard({
               <div style={{ padding: '2.5rem', textAlign: 'center' }}>
                 <CheckCircle size={48} color="#10b981" weight="fill" style={{ margin: '0 auto 1rem' }} />
                 <h4 className="clone-modal-heading" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Laporan Berhasil Terkirim!</h4>
-                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis TaniNiaga akan segera meninjau.</p>
+                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis AgriConnect akan segera meninjau.</p>
               </div>
             ) : (
               <form onSubmit={handleSendBugReport}>

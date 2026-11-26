@@ -31,6 +31,7 @@ import {
 } from '../../lib/chatService';
 import { supabase } from '../../lib/supabaseClient';
 import { DEFAULT_AVATAR } from '../../lib/constants';
+import { appToast } from '../../lib/appFeedback';
 
 const CHAT_EMOJIS = [
   '😊', '😄', '😃', '👍', '🙏', '👏', '❤️', '🤝', '👌', '😎',
@@ -75,7 +76,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5 MB.');
+      appToast('Ukuran file maksimal 5 MB. Silakan pilih file yang lebih kecil.', 'error');
       e.target.value = '';
       return;
     }
@@ -445,7 +446,7 @@ export default function AdminChatView({ currentUserId: propUserId, currentUserPr
                             ) : (
                               <a 
                                 href={m.attachmentUrl} 
-                                download={m.attachmentName || 'dokumen-taniniaga'}
+                                download={m.attachmentName || 'dokumen-agriconnect'}
                                 target="_blank" 
                                 rel="noreferrer"
                                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}

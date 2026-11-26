@@ -13,6 +13,7 @@ import {
 } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabaseClient';
 import { fetchTransactionsFromSupabase } from '../../lib/dealService';
+import { appToast } from '../../lib/appFeedback';
 
 const mapTrxToEscrow = (t) => {
   const total = Number(t.amount || t.totalValue || 0);
@@ -104,7 +105,7 @@ export default function AdminEscrowView() {
 
   const handleConfirmRelease = async () => {
     if (!adminPin || adminPin.length < 4) {
-      alert('Masukkan minimal 4 digit PIN Otorisasi Admin');
+      appToast('Masukkan minimal 4 digit PIN Otorisasi Admin terlebih dahulu.', 'error');
       return;
     }
 

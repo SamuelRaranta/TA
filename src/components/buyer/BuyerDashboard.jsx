@@ -26,7 +26,6 @@ import {
   Moon,
   BookmarkSimple,
   PlusCircle,
-  Buildings,
   Plant,
   Truck,
   User,
@@ -38,8 +37,8 @@ import { fetchMarketPricesFromSupabase, subscribeMarketPrices } from '../../lib/
 import { fetchCommoditiesFromSupabase, subscribeCommodities } from '../../lib/commodityService';
 import { 
   fetchProcurementProposalsFromSupabase, 
-  subscribeProcurementProposals, 
-  mapProposalToOfferItem 
+  subscribeProcurementProposals,
+  mapProposalToOfferItem
 } from '../../lib/procurementService';
 import {
   fetchOffersFromSupabase,
@@ -76,6 +75,7 @@ import NotificationDropdown from '../common/NotificationDropdown';
 import NotificationPage from '../common/NotificationPage';
 import AppDownloadPromoCard from '../common/AppDownloadPromoCard';
 import { useNotifications } from '../../lib/useNotifications';
+import { appAlert } from '../../lib/appFeedback';
 
 // Route mapping for Buyer sub-pages
 const BUYER_TAB_TO_ROUTE = {
@@ -313,34 +313,10 @@ export default function BuyerDashboard({
       const freshProposals = proposalsRes?.data || [];
       setProposals(freshProposals);
 
+      // Daftar Penawaran harus berisi transaksi tawaran pembeli ke petani
+      // yang benar-benar tersimpan di tabel offers, bukan proposal pengadaan.
       const dbOffers = offersRes?.data || [];
-      // Halaman "Lihat Penawaran" pembeli menampilkan proposal pengadaan milik pembeli
-      // yang sudah disetujui / diterima oleh admin (status 'Aktif' atau 'Disetujui')
-      const mappedProposalOffers = freshProposals
-        .filter(p => p.status === 'Aktif' || p.status === 'Disetujui')
-        .map(p => {
-          const mapped = mapProposalToOfferItem(p);
-          // Sertakan tawaran balik (counter-offer) dari petani jika ada
-          const counterOffer = dbOffers.find(o => 
-            (o.proposalDbId && o.proposalDbId === p.dbId) || 
-            (o.proposalCode && o.proposalCode === p.code) ||
-            (o.commodityId === p.id && o.status === 'Counter-Offer')
-          );
-          if (counterOffer) {
-            return {
-              ...mapped,
-              status: 'Counter-Offer',
-              counterPricePerKg: counterOffer.counterPricePerKg || counterOffer.offeredPricePerKg,
-              counterTon: counterOffer.counterTon || counterOffer.requestedTon,
-              counterNotes: counterOffer.counterNotes || counterOffer.notes,
-              counterBy: counterOffer.counterBy || 'petani',
-              farmerGroup: counterOffer.farmerGroup || counterOffer.farmerName || mapped.farmerGroup
-            };
-          }
-          return mapped;
-        });
-
-      setOffers(mappedProposalOffers);
+      setOffers(dbOffers);
 
       setBindingAgreements(contractsRes?.data || []);
 
@@ -398,11 +374,12 @@ export default function BuyerDashboard({
           buyerId: trx.buyerId || null,
           farmerId: trx.farmerId || null,
           accountNumber: `8809-08${idx}1-2294-001`,
-          bankName: 'Bank Mandiri (Platform Escrow TaniNiaga)',
+          bankName: 'Bank Mandiri (Platform Escrow AgriConnect)',
           method: resolvedMethod,
           paidDate: isMidtransPaid
             ? (midtransPaidAt ? new Date(midtransPaidAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Terverifikasi')
             : (trx.status === 'Selesai' || trx.goodsStatus === 'diterima' ? 'Lunas' : null),
+          paidAt: midtransPaidAt || (trx.goodsStatus === 'diterima' ? trx.receivedAt : null) || (trx.status === 'Selesai' ? trx.createdAt : null),
           referenceNumber: midtransRef || (['Pembayaran Berhasil', 'Selesai', 'Lunas'].includes(trx.status) ? `REF/ESC-${idx}` : null),
           paymentStatus: isMidtransPaid ? 'paid' : 'pending',
           paymentType: trx.paymentType || (['Berjalan', 'DP Terkunci'].includes(trx.status) ? 'DP Booking Fee (5%)' : 'Pelunasan Timbang Muat')
@@ -662,7 +639,12 @@ export default function BuyerDashboard({
     } catch (err) {
       console.warn('Gagal mengajukan penawaran ke Supabase:', err);
       setOffers(prev => prev.filter(o => o.id !== newOffer.id));
-      window.alert(`Gagal mengajukan penawaran: ${err?.message || err}`);
+      appAlert({
+        title: 'Penawaran Gagal Diajukan',
+        message: `Penawaran belum tersimpan. ${err?.message || err || 'Silakan coba lagi.'}`,
+        tone: 'error',
+        confirmLabel: 'Tutup'
+      });
       return false;
     }
   };
@@ -670,7 +652,8 @@ export default function BuyerDashboard({
   // Handle Counter Offer Acceptance — deal ditutup: kunci stok + kontrak + transaksi.
   const handleAcceptCounterOffer = async (offerId) => {
     const targetOffer = offers.find(o => o.id === offerId);
-    if (!targetOffer) return;
+    if (!targetOffer) return false;
+    const databaseOfferId = targetOffer.databaseOfferId || offerId;
 
     const acceptedPrice = targetOffer.counterPricePerKg || targetOffer.offeredPricePerKg;
     const acceptedTon = targetOffer.counterTon || targetOffer.requestedTon;
@@ -687,21 +670,28 @@ export default function BuyerDashboard({
 
     try {
       // Simpan angka deal dulu agar penguncian memakai tonase final.
-      await updateOfferInSupabase(offerId, {
+      const savedCounter = await updateOfferInSupabase(databaseOfferId, {
         counterPricePerKg: acceptedPrice,
         counterTon: acceptedTon
       });
+      if (!savedCounter.data) throw new Error(savedCounter.error || 'Gagal menyimpan nilai penawaran yang disepakati.');
       // Kunci stok idempoten (lewati bila reservasi saat penawaran masih berlaku).
-      const lock = await ensureStockReserved(offerId);
+      const lock = await ensureStockReserved(databaseOfferId);
       if (!lock.success) {
-        window.alert(lock.error?.message || 'Gagal mengunci stok komoditas.');
-        return;
+        appAlert({
+          title: 'Stok Tidak Dapat Dikunci',
+          message: lock.error?.message || 'Stok komoditas gagal dikunci. Silakan coba beberapa saat lagi.',
+          tone: 'error',
+          confirmLabel: 'Tutup'
+        });
+        return false;
       }
-      await updateOfferInSupabase(offerId, { status: 'Disetujui' });
+      const accepted = await updateOfferInSupabase(databaseOfferId, { status: 'Disetujui', acceptedAt: new Date().toISOString() });
+      if (!accepted.data) throw new Error(accepted.error || 'Gagal menyimpan status penawaran diterima.');
 
       const contractPayload = {
         contractCode: `AC-AGR/2026/IX/00${bindingAgreements.length + 60}`,
-        offerId: targetOffer.id,
+        offerId: databaseOfferId,
         commodityId,
         productName: targetOffer.commodityName,
         farmerId: targetOffer.farmerId,
@@ -744,29 +734,51 @@ export default function BuyerDashboard({
       notifyOfferAcceptedToFarmer({
         farmerId: targetOffer.farmerId,
         commodityName: targetOffer.commodityName || 'Komoditas',
-        offerId
+        offerId: databaseOfferId
       }).catch(e => console.warn('notifyOfferAcceptedToFarmer error:', e));
 
       setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Disetujui', offeredPricePerKg: acceptedPrice, requestedTon: acceptedTon, commodityId } : o));
       setActiveTab('pembayaran');
+      return true;
     } catch (err) {
       console.warn('Gagal memproses persetujuan penawaran:', err);
-      await ensureStockRestored(offerId);
-      window.alert(`Gagal memproses persetujuan: ${err?.message || err}`);
+      await ensureStockRestored(databaseOfferId);
+      appAlert({
+        title: 'Gagal Memproses Persetujuan',
+        message: `Penawaran belum dapat diproses. ${err?.message || err || 'Silakan coba lagi.'}`,
+        tone: 'error',
+        confirmLabel: 'Tutup'
+      });
+      return false;
     }
+  };
+
+  const handleRejectCounterOffer = async (offerId) => {
+    const result = await updateOfferInSupabase(offerId, {
+      status: 'Ditolak',
+      rejectionReason: 'Tawaran balik petani ditolak oleh pembeli.'
+    });
+    if (!result.data) {
+      appAlert({ title: 'Gagal Menolak Tawaran', message: result.error || 'Status tawaran belum berhasil disimpan.', tone: 'error', confirmLabel: 'Tutup' });
+      return false;
+    }
+    await ensureStockRestored(offerId);
+    setOffers(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Ditolak', rejectionReason: 'Tawaran balik petani ditolak oleh pembeli.' } : o));
+    return true;
   };
 
   // Handle Buyer Counter Negotiation (Connected to Supabase)
   const handleSubmitBuyerCounter = async ({ offerId, newPrice, newTon, notes }) => {
     const targetOffer = offers.find(o => o.id === offerId);
     try {
-      await updateOfferInSupabase(offerId, {
+      const result = await updateOfferInSupabase(offerId, {
         status: 'Counter-Offer',
         counterPricePerKg: newPrice,
         counterTon: newTon,
         counterNotes: notes || '',
         counterBy: 'pembeli'
       });
+      if (!result.data) throw new Error(result.error || 'Gagal menyimpan tawaran balik.');
       setOffers(prev => prev.map(o => {
         if (o.id === offerId) {
           return {
@@ -787,8 +799,11 @@ export default function BuyerDashboard({
         commodityName: targetOffer?.commodityName || 'Komoditas',
         offerId
       }).catch(e => console.warn('notifyOfferCounteredByBuyer error:', e));
+      return true;
     } catch (err) {
       console.warn('Gagal mengirim counter offer:', err);
+      appAlert({ title: 'Gagal Mengirim Tawaran Balik', message: err?.message || 'Coba lagi beberapa saat.', tone: 'error', confirmLabel: 'Tutup' });
+      return false;
     }
   };
 
@@ -810,7 +825,12 @@ export default function BuyerDashboard({
             .select('id, status')
             .in('contract_id', cIds);
           if ((linkedTrxs || []).some(t => t.status === 'Selesai')) {
-            window.alert('Penawaran ini sudah lunas dan tidak dapat dibatalkan.');
+            appAlert({
+              title: 'Penawaran Tidak Dapat Dibatalkan',
+              message: 'Transaksi untuk penawaran ini sudah lunas dan diselesaikan, sehingga tidak dapat dibatalkan lagi.',
+              tone: 'info',
+              confirmLabel: 'Mengerti'
+            });
             return;
           }
           for (const t of (linkedTrxs || [])) {
@@ -853,7 +873,7 @@ export default function BuyerDashboard({
   const getPageTitle = () => {
     switch (activeTab) {
       case 'dashboard':
-        return 'Transaksi';
+        return 'Dashboard';
       case 'katalog':
         return 'Cari Komoditas';
       case 'watchlist':
@@ -900,14 +920,14 @@ export default function BuyerDashboard({
                 setActiveTab('dashboard');
               }
             }}
-            title="TaniNiaga Dashboard Pembeli"
+            title="AgriConnect Dashboard Pembeli"
           >
             <div className="clone-brand-icon-box" style={{ background: 'linear-gradient(135deg, #5452f6 0%, #3b82f6 100%)' }}>
-              <Buildings size={17} weight="fill" color="#ffffff" />
+              <Plant size={17} weight="fill" color="#ffffff" />
             </div>
             {!isCollapsed && (
               <span className="clone-logo-text">
-                Tani<span style={{ color: '#5452f6' }}>Niaga</span>
+                Agri<span style={{ color: '#5452f6' }}>Connect</span>
               </span>
             )}
           </div>
@@ -934,7 +954,7 @@ export default function BuyerDashboard({
                 type="button"
                 className={`clone-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
                 onClick={() => { handleTabChange('dashboard'); setMobileSidebarOpen(false); }}
-                title="Transaksi"
+                title="Dashboard"
               >
                 {activeTab === 'dashboard' && <span className="clone-active-indicator" />}
                 <SquaresFour size={18} weight={activeTab === 'dashboard' ? 'fill' : 'regular'} className="clone-nav-icon" />
@@ -1369,6 +1389,7 @@ export default function BuyerDashboard({
               offers={offers}
               commodities={commodities}
               transactions={transactions}
+              payments={payments}
               proposals={proposals}
               buyerProfile={buyerProfile}
               isLoading={isLoadingData}
@@ -1424,7 +1445,11 @@ export default function BuyerDashboard({
           {/* TAB 3: PENAWARAN SAYA */}
           {activeTab === 'penawaran' && (
             <LihatPenawaran 
-              offers={offers}
+              offers={proposals
+                .filter(proposal => !['menunggu persetujuan', 'tidak aktif', 'ditolak', 'rejected'].includes(
+                  String(proposal.status || '').trim().toLowerCase()
+                ))
+                .map(mapProposalToOfferItem)}
               isLoading={isLoadingData}
               title="Lihat Penawaran"
               subtitle="Pantau status seluruh proposal penawaran harga dan tonase yang Anda ajukan ke kelompok tani produsen. Terima kesepakatan, tolak penawaran balik, atau lakukan negosiasi harga ulang secara langsung."
@@ -1440,10 +1465,12 @@ export default function BuyerDashboard({
             <RiwayatPengadaanPembeli 
               transactions={transactions}
               offers={offers}
-              proposals={proposals}
               isLoading={isLoadingData}
               onNavigate={(tab) => setActiveTab(tab)}
               onCancelOffer={handleCancelOffer}
+              onAcceptCounterOffer={handleAcceptCounterOffer}
+              onRejectCounterOffer={handleRejectCounterOffer}
+              onSubmitBuyerCounter={handleSubmitBuyerCounter}
             />
           )}
 
@@ -1547,7 +1574,7 @@ export default function BuyerDashboard({
               <div style={{ padding: '2.5rem', textAlign: 'center' }}>
                 <CheckCircle size={48} color="#10b981" weight="fill" style={{ margin: '0 auto 1rem' }} />
                 <h4 className="clone-modal-heading" style={{ fontSize: '1.15rem', fontWeight: 700 }}>Laporan Berhasil Terkirim!</h4>
-                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis TaniNiaga akan segera meninjau.</p>
+                <p className="clone-modal-subheading" style={{ fontSize: '0.88rem', marginTop: '6px' }}>Terima kasih atas masukan Anda. Tim teknis AgriConnect akan segera meninjau.</p>
               </div>
             ) : (
               <form onSubmit={handleSendBugReport}>

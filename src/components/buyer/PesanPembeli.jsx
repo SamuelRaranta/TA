@@ -671,7 +671,7 @@ export default function BuyerChatView({ currentUserId: propUserId, currentUserPr
                             ) : (
                               <a 
                                 href={msg.attachmentUrl} 
-                                download={msg.attachmentName || 'dokumen-taniniaga'}
+                                download={msg.attachmentName || 'dokumen-agriconnect'}
                                 target="_blank" 
                                 rel="noreferrer"
                                 style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', background: isMe ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderRadius: '6px', textDecoration: 'none', color: 'inherit' }}
@@ -1029,22 +1029,9 @@ export default function BuyerChatView({ currentUserId: propUserId, currentUserPr
                   <div className="clone-chat-req-top">
                     <img src={req.avatar || DEFAULT_AVATAR} alt={req.name} className="clone-chat-req-avatar" onError={(e) => { e.currentTarget.src = DEFAULT_AVATAR; }} />
                     <div className="clone-chat-req-info">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <h4 className="clone-chat-req-name">{req.name}</h4>
-                          <span className={`clone-chat-role-pill ${req.role}`}>
-                            {req.role === 'petani' ? 'Petani' : 'Pembeli'}
-                          </span>
-                        </div>
-                        <span className="clone-chat-req-time">{req.time}</span>
-                      </div>
-                      <span className="clone-chat-req-company">{req.company}</span>
+                      <h4 className="clone-chat-req-name">{req.name}</h4>
                     </div>
                   </div>
-
-                  {req.note && (
-                    <p className="clone-chat-req-note">"{req.note}"</p>
-                  )}
 
                   <div className="clone-chat-req-actions">
                     <button

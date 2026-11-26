@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient';
 
 /**
- * Service Notifikasi Real-Time TaniNiaga (Supabase Integration)
+ * Service Notifikasi Real-Time AgriConnect (Supabase Integration)
  * Mendukung 3 Role: Pembeli, Petani, Admin.
  * 100% Data Aktual dari Supabase - Tanpa Mock / Dummy Data.
  */

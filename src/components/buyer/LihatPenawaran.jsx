@@ -34,6 +34,7 @@ import {
   subscribeProcurementProposals, 
   mapProposalToOfferItem 
 } from '../../lib/procurementService';
+import { appToast } from '../../lib/appFeedback';
 
 export default function BuyerOffers({ 
   offers = [], 
@@ -101,7 +102,7 @@ export default function BuyerOffers({
   };
 
   const [selectedCategory, setSelectedCategory] = useState('Semua');
-  const [statusFilter, setStatusFilter] = useState('Semua'); // 'Semua' | 'Menunggu Respon' | 'Counter-Offer' | 'Disetujui' | 'Ditolak'
+  const [statusFilter, setStatusFilter] = useState('Semua'); // 'Semua' | 'Menunggu Respon' | 'Counter-Offer' | 'Diterima' | 'Ditolak'
   const [searchTerm, setSearchTerm] = useState('');
 
   // Advance Search state
@@ -198,10 +199,18 @@ export default function BuyerOffers({
 
       // 2. Notify parent handler
       if (onAcceptCounterOffer) {
-        await onAcceptCounterOffer(selectedOfferForAccept.id, {
+        const accepted = await onAcceptCounterOffer(selectedOfferForAccept.id, {
           ...selectedOfferForAccept,
           status: 'Disetujui'
         });
+        if (accepted === false) {
+          setOfferList(prev => prev.map(item => item.id === selectedOfferForAccept.id
+            ? { ...item, status: selectedOfferForAccept.status }
+            : item
+          ));
+          setIsAcceptingOffer(false);
+          return;
+        }
       }
 
       setAcceptOfferSuccess(true);
@@ -222,7 +231,7 @@ export default function BuyerOffers({
     }
   };
 
-  const statusOptions = ['Semua', 'Menunggu Respon', 'Counter-Offer', 'Disetujui', 'Ditolak'];
+  const statusOptions = ['Semua', 'Menunggu Respon', 'Counter-Offer', 'Diterima', 'Ditolak'];
 
   const [appliedAdvCriteria, setAppliedAdvCriteria] = useState(null);
 
@@ -251,7 +260,7 @@ export default function BuyerOffers({
     // 2. Status filter
     const matchesStatus = statusFilter === 'Semua' ? true : (
       offer.status === statusFilter ||
-      (statusFilter === 'Disetujui' && (offer.status === 'Aktif' || offer.status === 'Diterima')) ||
+      (statusFilter === 'Diterima' && ['Aktif', 'Disetujui', 'Diterima'].includes(offer.status)) ||
       (statusFilter === 'Menunggu Respon' && (offer.status === 'Menunggu Persetujuan' || offer.status === 'pending'))
     );
 
@@ -323,9 +332,11 @@ export default function BuyerOffers({
       });
     }
 
-    alert(isFarmerView 
-      ? `Penawaran pasokan untuk ${selectedOfferForNego.commodityName} sebesar ${tonNum} Ton (Rp${priceNum.toLocaleString('id-ID')}/kg) berhasil diajukan!`
-      : `Tawaran balik untuk ${selectedOfferForNego.commodityName} sebesar ${tonNum} Ton (Rp${priceNum.toLocaleString('id-ID')}/kg) berhasil dikirim ke kelompok tani!`
+    appToast(
+      isFarmerView
+        ? `Penawaran pasokan untuk ${selectedOfferForNego.commodityName} sebesar ${tonNum} Ton (Rp${priceNum.toLocaleString('id-ID')}/kg) berhasil diajukan!`
+        : `Tawaran balik untuk ${selectedOfferForNego.commodityName} sebesar ${tonNum} Ton (Rp${priceNum.toLocaleString('id-ID')}/kg) berhasil dikirim ke kelompok tani!`,
+      'success'
     );
     setReNegotiateModalOpen(false);
     setSelectedOfferForNego(null);
@@ -450,7 +461,7 @@ export default function BuyerOffers({
           const reqKg = offer.requestedKg || (offer.requestedTon ? offer.requestedTon * 1000 : 1000);
           const price = offer.offeredPricePerKg || 0;
           const totalBudget = offer.totalBudget || (reqKg * price);
-          const statusText = offer.status || 'Aktif';
+          const statusText = ['Disetujui', 'Diterima'].includes(offer.status) ? 'Diterima' : (offer.status || 'Aktif');
 
           return (
             <div key={offer.id} className="proposal-card">
@@ -497,14 +508,14 @@ export default function BuyerOffers({
                         <span>{offer.counterBy === 'pembeli' ? 'Tawar Balik (Terkirim)' : 'Tawaran Balik dari Petani'}</span>
                       </span>
                     )}
-                    {statusText === 'Disetujui' && (
+                    {statusText === 'Diterima' && (
                       <span
                         className="proposal-status-badge"
                         style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.3)' }}
-                        title="Penawaran disetujui"
+                        title="Penawaran diterima"
                       >
                         <CheckCircle size={14} weight="fill" />
-                        <span>Disetujui</span>
+                        <span>Diterima</span>
                       </span>
                     )}
                   </div>
@@ -942,19 +953,6 @@ export default function BuyerOffers({
                   >
                     <CheckCircle size={15} weight="bold" />
                     <span>Terima Penawaran</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleCloseDetailModal();
-                      handleOpenNegoModal(selectedOfferForDetail);
-                    }}
-                    className="clone-btn-primary"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                    title="Tawar dan ajukan pasokan komoditas untuk kebutuhan proposal ini"
-                  >
-                    <Handshake size={15} weight="bold" />
-                    <span>Tawar & Ajukan</span>
                   </button>
                 </>
               )}

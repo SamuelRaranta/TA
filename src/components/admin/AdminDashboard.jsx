@@ -13,7 +13,6 @@ import {
   ShieldCheck, 
   CaretDown,
   User,
-  CreditCard,
   Question,
   Bug,
   X,
@@ -22,7 +21,8 @@ import {
   CheckCircle,
   TrendUp,
   ChatCircleText,
-  Handshake
+  Handshake,
+  Plant
 } from '@phosphor-icons/react';
 
 
@@ -147,8 +147,8 @@ export default function AdminDashboard({
       if (parsed?.id && (!parsed?.role || String(parsed.role).toLowerCase() === 'admin')) {
         return {
           id: parsed.id,
-          name: parsed.fullName || parsed.name || 'Admin Utama TaniNiaga',
-          email: parsed.email || 'admin@taniniaga.id',
+          name: parsed.fullName || parsed.name || 'Admin Utama AgriConnect',
+          email: parsed.email || 'admin@agriconnect.id',
           phone: parsed.phone || '0812-0000-9999',
           location: '',
           address: '',
@@ -161,8 +161,8 @@ export default function AdminDashboard({
     } catch (e) {}
     return {
       id: null,
-      name: 'Admin Utama TaniNiaga',
-      email: 'admin@taniniaga.id',
+      name: 'Admin Utama AgriConnect',
+      email: 'admin@agriconnect.id',
       phone: '0812-0000-9999',
       location: '',
       address: '',
@@ -357,14 +357,14 @@ export default function AdminDashboard({
                 setActiveTab('dashboard');
               }
             }}
-            title="TaniNiaga Dashboard Admin"
+            title="AgriConnect Dashboard Admin"
           >
             <div className="clone-brand-icon-box" style={{ background: 'linear-gradient(135deg, #5452f6 0%, #3b82f6 100%)' }}>
-              <ShieldCheck size={18} weight="fill" color="#ffffff" />
+              <Plant size={18} weight="fill" color="#ffffff" />
             </div>
             {!isCollapsed && (
               <span className="clone-logo-text">
-                Tani<span style={{ color: '#5452f6' }}>Niaga</span>
+                Agri<span style={{ color: '#5452f6' }}>Connect</span>
               </span>
             )}
           </div>
@@ -535,7 +535,7 @@ export default function AdminDashboard({
         {/* Bottom Promo Card: Exact Sky Blue Theme matching Farmer & Buyer */}
         <div className="clone-sidebar-promo-card sky-blue-card spacious">
           <div className="clone-promo-sky-glow" />
-          <div className="clone-promo-icon-badge sky-badge" title="TaniNiaga Operations">
+          <div className="clone-promo-icon-badge sky-badge" title="AgriConnect Operations">
             <ShieldCheck size={16} weight="fill" color="#0284c7" />
           </div>
           <h4 className="clone-promo-title">Portal Operasional<br />Admin</h4>
@@ -687,19 +687,6 @@ export default function AdminDashboard({
                     >
                       <User size={16} weight="regular" className="clone-dropdown-item-icon" />
                       <span>Profil Admin</span>
-                    </button>
-
-                    {/* 2. Rekening Escrow */}
-                    <button
-                      type="button"
-                      className="clone-profile-dropdown-item"
-                      onClick={() => {
-                        setActiveTab('escrow');
-                        setProfileMenuOpen(false);
-                      }}
-                    >
-                      <CreditCard size={16} weight="regular" className="clone-dropdown-item-icon" />
-                      <span>Rekening Escrow</span>
                     </button>
 
                     <div className="clone-profile-dropdown-divider" />

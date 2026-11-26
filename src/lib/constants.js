@@ -1,9 +1,9 @@
 /**
- * Global Constants for TaniNiaga
+ * Global Constants for AgriConnect
  */
 
-// Default profile avatar (Siluet abu-abu Gambar 2)
-export const DEFAULT_AVATAR = '/default-avatar.png';
+// Default profile avatar (siluet abu-abu). File tersedia di public/default-avatar.svg
+export const DEFAULT_AVATAR = '/default-avatar.svg';
 
 /**
  * Helper untuk memastikan URL avatar valid, fallback ke DEFAULT_AVATAR jika kosong

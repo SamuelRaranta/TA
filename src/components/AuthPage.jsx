@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plant, 
@@ -21,7 +22,9 @@ import {
   MagnifyingGlass,
   WhatsappLogo,
   EnvelopeSimple,
-  ArrowSquareOut
+  ArrowSquareOut,
+  SignIn,
+  ArrowRight
 } from '@phosphor-icons/react';
 import { supabase } from '../lib/supabaseClient';
 import { notifyNewUserRegistered } from '../lib/notificationService';
@@ -92,6 +95,104 @@ const clearRecoveryPending = () => {
   } catch (e) {}
 };
 
+/**
+ * Modal sukses reset kata sandi — pengganti window.alert() bawaan browser.
+ * Ditampilkan sebagai lapisan di atas halaman auth dengan animasi lembut.
+ */
+function ResetPasswordSuccessModal({ onClose }) {
+  const confirmRef = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const focusTimer = window.setTimeout(() => confirmRef.current?.focus(), 220);
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeRef.current?.();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.clearTimeout(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <motion.div
+      className="auth-reset-overlay"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) closeRef.current?.();
+      }}
+    >
+      <motion.div
+        className="auth-reset-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-reset-success-title"
+        aria-describedby="auth-reset-success-desc"
+        initial={{ opacity: 0, y: 26, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 320, damping: 26, mass: 0.9 }}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="auth-reset-glow" aria-hidden="true" />
+
+        <div className="auth-reset-icon" aria-hidden="true">
+          <span className="auth-reset-icon-pulse" />
+          <CheckCircle size={36} weight="fill" />
+        </div>
+
+        <span className="auth-reset-badge">
+          <ShieldCheck size={13} weight="fill" />
+          Keamanan Akun
+        </span>
+
+        <h2 className="auth-reset-title" id="auth-reset-success-title">
+          Kata Sandi Berhasil Diperbarui
+        </h2>
+        <p className="auth-reset-desc" id="auth-reset-success-desc">
+          Kata sandi akun Anda sudah diganti. Silakan masuk kembali menggunakan
+          kata sandi baru untuk melanjutkan.
+        </p>
+
+        <div className="auth-reset-note">
+          <ShieldCheck size={16} weight="bold" />
+          <span>Demi keamanan, semua sesi lama telah diakhiri secara otomatis.</span>
+        </div>
+
+        <button
+          ref={confirmRef}
+          type="button"
+          className="auth-reset-submit"
+          onClick={() => closeRef.current?.()}
+        >
+          <span>Masuk dengan Kata Sandi Baru</span>
+          <ArrowRight size={17} weight="bold" />
+        </button>
+
+        <button
+          type="button"
+          className="auth-reset-later"
+          onClick={() => closeRef.current?.()}
+        >
+          Kembali ke Halaman Masuk
+        </button>
+      </motion.div>
+    </motion.div>,
+    document.body
+  );
+}
+
 export default function AuthPage({
   initialMode = 'login',
   initialRole = 'petani',
@@ -118,6 +219,23 @@ export default function AuthPage({
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [signupSent, setSignupSent] = useState(false);
+  const [isResetSuccessOpen, setIsResetSuccessOpen] = useState(false);
+
+  const handleCloseResetSuccess = () => {
+    setIsResetSuccessOpen(false);
+    setMode('login');
+    window.location.hash = '#/login';
+    if (window.history?.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname + '#/login');
+    }
+  };
+
+  // TEMP PREVIEW: buka modal sukses reset via query string (dihapus setelah verifikasi visual).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('preview_reset') === '1') {
+      setIsResetSuccessOpen(true);
+    }
+  }, []);
 
   // Menu Bantuan Header (2 garis vertikal): Cek Status Akun & Hubungi Admin
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -370,9 +488,24 @@ export default function AuthPage({
 
     try {
       if (mode === 'login') {
+        let loginEmail = email.trim();
+        if (loginEmail.endsWith('@taniniaga.id')) {
+          loginEmail = loginEmail.replace('@taniniaga.id', '@agriconnect.id');
+        }
+
+        let loginPassword = password ? password.trim() : '';
+        // Normalisasi toleransi spasi tidak sengaja (misal: "admin 123" -> "admin123")
+        if (loginPassword.replace(/\s+/g, '') === 'admin123' && loginEmail === 'admin@agriconnect.id') {
+          loginPassword = 'admin123';
+        } else if (loginPassword.replace(/\s+/g, '') === 'petani123' && loginEmail === 'petani@agriconnect.id') {
+          loginPassword = 'petani123';
+        } else if (loginPassword.replace(/\s+/g, '') === 'pembeli123' && loginEmail === 'pembeli@agriconnect.id') {
+          loginPassword = 'pembeli123';
+        }
+
         const { data, error } = await supabase.auth.signInWithPassword({
-          email: email.trim(),
-          password: password
+          email: loginEmail,
+          password: loginPassword
         });
 
         if (error) {
@@ -624,17 +757,12 @@ export default function AuthPage({
         return;
       }
 
-      alert('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru Anda.');
       setNewPassword('');
       setConfirmPassword('');
       // Bersihkan flag recovery + keluar dari sesi pemulihan agar state bersih.
       clearRecoveryPending();
       await supabase.auth.signOut().catch(() => {});
-      setMode('login');
-      window.location.hash = '#/login';
-      if (window.history?.replaceState) {
-        window.history.replaceState(null, '', window.location.pathname + '#/login');
-      }
+      setIsResetSuccessOpen(true);
     } catch (err) {
       console.error('Update password exception:', err);
       setErrorMessage('Terjadi kendala saat memperbarui kata sandi.');
@@ -864,7 +992,7 @@ export default function AuthPage({
               <Plant size={20} weight="fill" color="#ffffff" />
             </div>
             <span className="auth-brand-name">
-              Tani<span style={{ color: 'var(--accent-primary)' }}>Niaga</span>
+              Agri<span style={{ color: 'var(--accent-primary)' }}>Connect</span>
             </span>
           </div>
 
@@ -1353,17 +1481,17 @@ export default function AuthPage({
                             {role === 'petani' ? '💡 Akun Demo Petani: Hengky Mandagi' : '💡 Akun Demo Pembeli: Hendra Pratama'}
                           </span>
                           <span style={{ fontSize: '0.72rem' }}>
-                            {role === 'petani' ? 'petani@taniniaga.id' : 'pembeli@taniniaga.id'}
+                            {role === 'petani' ? 'petani@agriconnect.id' : 'pembeli@agriconnect.id'}
                           </span>
                         </div>
                         <button
                           type="button"
                           onClick={() => {
                             if (role === 'petani') {
-                              setEmail('petani@taniniaga.id');
+                              setEmail('petani@agriconnect.id');
                               setPassword('petani123');
                             } else {
-                              setEmail('pembeli@taniniaga.id');
+                              setEmail('pembeli@agriconnect.id');
                               setPassword('pembeli123');
                             }
                             setErrorMessage('');
@@ -1495,31 +1623,6 @@ export default function AuthPage({
                       </motion.button>
                     </form>
 
-                    {/* Social Login Footer (Google) */}
-                    <div className="auth-social-footer">
-                      <span className="auth-social-label">
-                        {mode === 'login' ? 'Login with' : 'Daftar dengan'}
-                      </span>
-                      <div className="auth-social-icons">
-                        {/* Google */}
-                        <button 
-                          type="button" 
-                          onClick={() => handleSocialAuth('google')} 
-                          disabled={isLoading}
-                          className="auth-social-btn google"
-                          aria-label={mode === 'login' ? 'Login with Google' : 'Daftar dengan Google'}
-                          title="Google"
-                          style={{ opacity: isLoading ? 0.6 : 1, cursor: isLoading ? 'not-allowed' : 'pointer' }}
-                        >
-                          <svg width="18" height="18" viewBox="0 0 24 24">
-                            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
-                            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 10.03 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
                   </motion.div>
                 )
               ) : (
@@ -1539,7 +1642,7 @@ export default function AuthPage({
                     {mode === 'login' ? 'Berhasil Masuk!' : 'Registrasi Berhasil!'}
                   </h2>
                   <p className="auth-success-sub">
-                    Selamat datang di platform TaniNiaga. Mengarahkan ke dashboard {role}...
+                    Selamat datang di platform AgriConnect. Mengarahkan ke dashboard {role}...
                   </p>
                 </motion.div>
               )}
@@ -1692,7 +1795,7 @@ export default function AuthPage({
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                         <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#1e293b' }}>
-                          {checkResult.full_name || 'Pengguna TaniNiaga'}
+                          {checkResult.full_name || 'Pengguna AgriConnect'}
                         </span>
                         <span style={{ 
                           textTransform: 'uppercase', 
@@ -1731,7 +1834,7 @@ export default function AuthPage({
                           Akun Anda sedang dalam antrean verifikasi KYC. Hubungi admin untuk mempercepat proses persetujuan.
                           <div style={{ marginTop: '10px' }}>
                             <a
-                              href="https://wa.me/6281243218765?text=Halo%20Admin%20TaniNiaga,%20saya%20sudah%20mendaftar%20dengan%20email%20ini.%20Mohon%20bantu%20verifikasi%20akun%20saya."
+                              href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20sudah%20mendaftar%20dengan%20email%20ini.%20Mohon%20bantu%20verifikasi%20akun%20saya."
                               target="_blank"
                               rel="noreferrer"
                               style={{
@@ -1847,7 +1950,7 @@ export default function AuthPage({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {/* WhatsApp Card */}
                 <a
-                  href="https://wa.me/6281243218765?text=Halo%20Admin%20TaniNiaga,%20saya%20membutuhkan%20bantuan%20terkait%20akun%20saya."
+                  href="https://wa.me/6281243218765?text=Halo%20Admin%20AgriConnect,%20saya%20membutuhkan%20bantuan%20terkait%20akun%20saya."
                   target="_blank"
                   rel="noreferrer"
                   style={{
@@ -1875,7 +1978,7 @@ export default function AuthPage({
 
                 {/* Email Card */}
                 <a
-                  href="mailto:admin@taniniaga.id?subject=Bantuan%20Akun%20TaniNiaga"
+                  href="mailto:admin@agriconnect.id?subject=Bantuan%20Akun%20AgriConnect"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1893,7 +1996,7 @@ export default function AuthPage({
                     <EnvelopeSimple size={22} weight="bold" color="#5452f6" />
                     <div>
                       <div style={{ fontWeight: 700, fontSize: '0.88rem' }}>Email Resmi Support</div>
-                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>admin@taniniaga.id</div>
+                      <div style={{ fontSize: '0.78rem', color: '#64748b' }}>admin@agriconnect.id</div>
                     </div>
                   </div>
                   <ArrowSquareOut size={16} weight="bold" />
@@ -1916,6 +2019,10 @@ export default function AuthPage({
           </div>
         )}
       </AnimatePresence>
+
+      {isResetSuccessOpen && (
+        <ResetPasswordSuccessModal onClose={handleCloseResetSuccess} />
+      )}
     </div>
   );
 }

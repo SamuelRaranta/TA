@@ -97,7 +97,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
 
             {/* Sub-headline */}
             <p className="hero-subtext">
-              TaniNiaga menghubungkan petani skala besar langsung ke distributor dan pabrik. Kunci harga, volume, dan jadwal pengambilan via kesepakatan digital yang mengikat.
+              AgriConnect menghubungkan petani skala besar langsung ke distributor dan pabrik. Kunci harga, volume, dan jadwal pengambilan via kesepakatan digital yang mengikat.
             </p>
 
             {/* Button Row matching Reference Buttons */}
@@ -240,7 +240,7 @@ export default function HeroSection({ onOpenSimulation, onRoleSelect }) {
                       }}>
                         <Plant size={14} color="#ffffff" weight="fill" />
                       </div>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>TaniNiaga</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>AgriConnect</span>
                     </div>
 
                     {/* Sidebar Links */}

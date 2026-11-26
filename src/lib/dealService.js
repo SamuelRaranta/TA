@@ -184,78 +184,65 @@ export const fetchOffersFromSupabase = async (options = {}) => {
 
     query = query.order('created_at', { ascending: false });
 
-    const { data, error } = await query;
+    let { data, error } = await query;
     if (error) {
-      console.warn('[dealService] Error fetching offers:', error.message);
-      return { data: [], error: error.message };
-    }
-
-    let resultOffers = (data || []).map(mapRowToOffer);
-
-    // Also include accepted proposals from "Cari Penawaran" that resulted in contracts for this farmer
-    if (farmerId) {
-      try {
-        const { data: contractData } = await supabase
-          .from('contracts')
-          .select('*, commodity:commodities(*), buyer:profiles!contracts_buyer_id_fkey(*)')
-          .eq('farmer_id', farmerId);
-
-        if (contractData && contractData.length > 0) {
-          const existingOfferIds = new Set((data || []).map(d => d.id));
-          for (const c of contractData) {
-            if (!existingOfferIds.has(c.offer_id) && !existingOfferIds.has(c.id)) {
-              const ton = Number(c.tonnage) || 1;
-              const price = Number(c.price_per_kg) || 0;
-              const stockT = c.commodity?.stock_ton ? Number(c.commodity.stock_ton) : 0;
-              resultOffers.push({
-                id: c.offer_id || c.id,
-                offerCode: c.contract_code ? `PROP-${c.contract_code.slice(-6)}` : `OFF-${c.id.slice(0, 8).toUpperCase()}`,
-                commodityId: c.commodity_id,
-                commodityName: c.commodity_name || c.commodity?.name || 'Komoditas Pertanian',
-                commodityImage: c.commodity?.image_url || null,
-                imageUrl: c.commodity?.image_url || null,
-                image: c.commodity?.image_url || null,
-                category: c.commodity?.category || 'Perkebunan',
-                buyerId: c.buyer_id,
-                buyerName: c.buyer?.company_name || c.buyer?.full_name || c.buyer_company || 'Pembeli Mitra',
-                buyerCompany: c.buyer_company || c.buyer?.company_name || '',
-                buyerAvatar: c.buyer?.avatar_url || null,
-                farmerId: c.farmer_id,
-                farmerGroup: c.farmer_group || 'Kelompok Tani',
-                farmerLeader: 'Petani',
-                requestedTon: ton,
-                requestedKg: ton * 1000,
-                stockTon: stockT,
-                stockKg: stockT * 1000,
-                offeredPricePerKg: price,
-                listingPricePerKg: price,
-                totalOfferValue: Number(c.total_value) || (ton * 1000 * price),
-                pickupDate: c.pickup_schedule || 'Sesuai Kontrak',
-                pickupLocation: c.pickup_location || 'Minahasa',
-                fleetType: 'Armada Pembeli',
-                paymentMethod: c.payment_method?.includes('Transfer') ? 'Transfer Bank' : (c.payment_method || 'Transfer Bank'),
-                validUntil: '30 September 2026',
-                rawValidUntil: '2026-09-30',
-                rejectionReason: null,
-                source: 'cari_penawaran',
-                isAutoAccepted: true,
-                notes: 'Penawaran ini diterima otomatis karena sesuai dengan permintaan yang Anda ajukan di Cari Penawaran.',
-                status: 'Diterima',
-                counterPricePerKg: null,
-                counterTon: null,
-                counterNotes: null,
-                createdAt: c.created_at,
-                updatedAt: c.updated_at
-              });
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[dealService] Exception loading contracts for auto-accepted offers:', err);
+      console.warn('[dealService] Joined offers query failed; retrying base rows:', error.message);
+      let fallbackQuery = supabase.from('offers').select('*');
+      if (farmerId) fallbackQuery = fallbackQuery.eq('farmer_id', farmerId);
+      if (buyerId) fallbackQuery = fallbackQuery.eq('buyer_id', buyerId);
+      if (status) {
+        const statuses = status === 'Diterima' ? ['Diterima', 'Disetujui', 'accepted']
+          : status === 'Ditolak' ? ['Ditolak', 'rejected']
+            : status === 'Kedaluwarsa' ? ['Kedaluwarsa', 'expired'] : null;
+        fallbackQuery = statuses ? fallbackQuery.in('status', statuses) : fallbackQuery.eq('status', status);
       }
+      fallbackQuery = fallbackQuery.order('created_at', { ascending: false });
+      const fallback = await fallbackQuery;
+      if (fallback.error) return { data: [], error: fallback.error.message };
+      data = fallback.data || [];
+
+      // Resolve the related buyer, farmer, and commodity using their database IDs
+      // when PostgREST cannot infer the foreign-key joins above.
+      const profileIds = [...new Set(data.flatMap(row => [row.buyer_id, row.farmer_id]).filter(Boolean))];
+      const commodityIds = [...new Set(data.map(row => row.commodity_id).filter(Boolean))];
+      const [profilesResult, commoditiesResult] = await Promise.all([
+        profileIds.length ? supabase.from('profiles').select('*').in('id', profileIds) : Promise.resolve({ data: [] }),
+        commodityIds.length ? supabase.from('commodities').select('*').in('id', commodityIds) : Promise.resolve({ data: [] })
+      ]);
+      const profiles = new Map((profilesResult.data || []).map(profile => [profile.id, profile]));
+      const commodities = new Map((commoditiesResult.data || []).map(commodity => [commodity.id, commodity]));
+      data = data.map(row => ({
+        ...row,
+        buyer: profiles.get(row.buyer_id) || null,
+        farmer: profiles.get(row.farmer_id) || null,
+        commodity: commodities.get(row.commodity_id) || null
+      }));
     }
 
-    return { data: resultOffers, error: null };
+    const rowsNeedingRelations = data || [];
+    const missingProfileIds = [...new Set(rowsNeedingRelations.flatMap(row => [
+      (!row.buyer || !row.buyer.full_name) ? row.buyer_id : null,
+      (!row.farmer || !row.farmer.full_name) ? row.farmer_id : null
+    ]).filter(Boolean))];
+    const missingCommodityIds = [...new Set(rowsNeedingRelations
+      .filter(row => row.commodity_id && (!row.commodity || !row.commodity.name || !row.commodity.image_url))
+      .map(row => row.commodity_id))];
+    if (missingProfileIds.length || missingCommodityIds.length) {
+      const [profileRes, commodityRes] = await Promise.all([
+        missingProfileIds.length ? supabase.from('profiles').select('*').in('id', missingProfileIds) : Promise.resolve({ data: [] }),
+        missingCommodityIds.length ? supabase.from('commodities').select('*').in('id', missingCommodityIds) : Promise.resolve({ data: [] })
+      ]);
+      const profileMap = new Map((profileRes.data || []).map(profile => [profile.id, profile]));
+      const commodityMap = new Map((commodityRes.data || []).map(commodity => [commodity.id, commodity]));
+      data = rowsNeedingRelations.map(row => ({
+        ...row,
+        buyer: row.buyer || profileMap.get(row.buyer_id) || null,
+        farmer: row.farmer || profileMap.get(row.farmer_id) || null,
+        commodity: row.commodity || commodityMap.get(row.commodity_id) || null
+      }));
+    }
+
+    return { data: (data || []).map(mapRowToOffer), error: null };
   } catch (err) {
     console.warn('[dealService] Exception fetching offers:', err);
     return { data: [], error: err.message };
@@ -278,21 +265,13 @@ export const createOfferInSupabase = async (offerData) => {
     const reqTon = Number(offerData.requestedTon) || 1;
     const commodityId = offerData.commodityId || null;
 
-    // Reservasi stok DULU (baca segar): gagal = offer tidak dibuat sama sekali.
-    if (commodityId) {
-      const pre = await supabase
-        .from('commodities')
-        .select('id, stock_ton')
-        .eq('id', commodityId)
-        .maybeSingle();
-      if (pre.error) throw pre.error;
-      const stock = Number(pre.data?.stock_ton) || 0;
-      if (!pre.data || stock < reqTon) {
-        throw new Error(`Stok tidak mencukupi (tersedia ${stock} Ton, dibutuhkan ${reqTon} Ton).`);
-      }
-      metaNotes = JSON.stringify({ ...JSON.parse(metaNotes), stockReserved: true, reservedTon: reqTon });
+    // Penawaran yang masih menunggu tidak mengunci persediaan. Stok baru
+    // dipesan ketika petani menerima penawaran, supaya permintaan yang belum
+    // disepakati tidak membuat stok database terlihat habis.
+    const isAlreadyAccepted = ['Disetujui', 'Diterima', 'accepted'].includes(offerData.status);
+    if (isAlreadyAccepted && commodityId) {
+      metaNotes = JSON.stringify({ ...JSON.parse(metaNotes), stockReserved: false, stockRestored: false, reservedTon: 0 });
     }
-
     const newRow = {
       commodity_id: commodityId,
       buyer_id: activeBuyerId,
@@ -312,12 +291,20 @@ export const createOfferInSupabase = async (offerData) => {
 
     if (error) throw error;
 
-    // Kurangi stok setelah baris tercatat. Gagal di sini = hapus baris agar tidak hantu.
-    if (commodityId) {
+    // Jalur yang membuat offer langsung diterima (mis. proposal Cari Penawaran)
+    // harus mengunci stok setelah baris tercatat. Offer biasa tetap menunggu.
+    if (isAlreadyAccepted && commodityId) {
       const dec = await decrementCommodityStock(commodityId, reqTon);
       if (!dec.success) {
         await supabase.from('offers').delete().eq('id', data.id);
         throw dec.error || new Error('Gagal mengunci stok.');
+      }
+      const acceptedMeta = { ...JSON.parse(metaNotes), stockReserved: true, reservedTon: reqTon };
+      const { error: metaError } = await supabase.from('offers').update({ notes: JSON.stringify(acceptedMeta) }).eq('id', data.id);
+      if (metaError) {
+        await restoreCommodityStock(commodityId, reqTon);
+        await supabase.from('offers').delete().eq('id', data.id);
+        throw metaError;
       }
     }
 
@@ -409,12 +396,31 @@ export const decrementCommodityStock = async (commodityId, ton) => {
     if (stock < need) {
       return { success: false, error: new Error(`Stok tidak mencukupi (tersedia ${stock} Ton, dibutuhkan ${need} Ton).`), stock };
     }
-    const { error: writeError } = await supabase
+    const { data: updatedRow, error: writeError } = await supabase
       .from('commodities')
       .update({ stock_ton: stock - need, updated_at: new Date().toISOString() })
-      .eq('id', commodityId);
+      .eq('id', commodityId)
+      .eq('stock_ton', row.stock_ton)
+      .gte('stock_ton', need)
+      .select('id, stock_ton')
+      .maybeSingle();
     if (writeError) throw writeError;
-    return { success: true, newStock: stock - need, error: null };
+    if (!updatedRow) {
+      const { data: current, error: currentError } = await supabase
+        .from('commodities')
+        .select('id, stock_ton')
+        .eq('id', commodityId)
+        .maybeSingle();
+      if (currentError) throw currentError;
+      const currentStock = Number(current?.stock_ton) || 0;
+      const message = currentStock < need
+        ? `Stok tidak mencukupi (tersedia ${currentStock} Ton, dibutuhkan ${need} Ton).`
+        : currentStock === stock
+          ? 'Database tidak mengizinkan perubahan stok. Periksa izin UPDATE untuk komoditas petani.'
+          : 'Stok berubah saat proses penerimaan. Muat ulang data lalu coba kembali.';
+      return { success: false, error: new Error(message), stock: currentStock };
+    }
+    return { success: true, newStock: Number(updatedRow.stock_ton), error: null };
   } catch (err) {
     console.warn('[dealService] decrementCommodityStock error:', err);
     return { success: false, error: err };
@@ -467,6 +473,7 @@ export const ensureStockReserved = async (offerId) => {
     let meta = {};
     try {
       if (row.notes && row.notes.trim().startsWith('{')) meta = JSON.parse(row.notes);
+      else if (row.notes) meta.notes = row.notes;
     } catch (e) {}
     if (meta.stockReserved && !meta.stockRestored) return { success: true, already: true };
     const ton = Number(row.counter_ton || row.requested_ton) || 0;
@@ -475,7 +482,22 @@ export const ensureStockReserved = async (offerId) => {
     meta.stockReserved = true;
     meta.stockRestored = false;
     meta.reservedTon = ton;
-    await supabase.from('offers').update({ notes: JSON.stringify(meta) }).eq('id', offerId);
+    const { data: updatedOffer, error: metadataError } = await supabase
+      .from('offers')
+      .update({ notes: JSON.stringify(meta) })
+      .eq('id', offerId)
+      .select('id')
+      .maybeSingle();
+    if (metadataError || !updatedOffer) {
+      const restored = await restoreCommodityStock(row.commodity_id, ton);
+      if (!restored.success) {
+        throw new Error(`Penanda reservasi stok gagal disimpan dan stok tidak berhasil dipulihkan. ${restored.error?.message || ''}`.trim());
+      }
+      return {
+        success: false,
+        error: metadataError || new Error('Penanda reservasi stok tidak tersimpan. Stok sudah dikembalikan.')
+      };
+    }
     return { success: true, error: null };
   } catch (err) {
     console.warn('[dealService] ensureStockReserved error:', err);

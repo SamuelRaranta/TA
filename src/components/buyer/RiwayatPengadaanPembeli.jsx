@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Handshake,
   MagnifyingGlass,
@@ -30,14 +30,19 @@ import {
   Info
 } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabaseClient';
+import { appConfirm } from '../../lib/appFeedback';
 import PillSearchBar from '../common/PillSearchBar';
+
+const OFFER_LIST_GRID_COLUMNS = '36px 1.4fr 1.3fr 0.95fr 0.75fr 1fr 0.8fr 0.75fr 2fr';
 
 export default function BuyerOfferList({ 
   transactions = [], 
   offers = [],
-  proposals = [],
   onNavigate,
   onCancelOffer,
+  onAcceptCounterOffer,
+  onRejectCounterOffer,
+  onSubmitBuyerCounter,
   isLoading = false
 }) {
   const [statusFilter, setStatusFilter] = useState('Semua');
@@ -50,10 +55,102 @@ export default function BuyerOfferList({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletedOfferIds, setDeletedOfferIds] = useState(new Set());
   const [toastMessage, setToastMessage] = useState(null);
+  const [acceptCounterTarget, setAcceptCounterTarget] = useState(null);
+  const [isAcceptingCounter, setIsAcceptingCounter] = useState(false);
+  const [counterTarget, setCounterTarget] = useState(null);
+  const [counterPrice, setCounterPrice] = useState('');
+  const [counterTon, setCounterTon] = useState('');
+  const [counterNotes, setCounterNotes] = useState('');
+  const [counterError, setCounterError] = useState('');
+  const [isSubmittingCounter, setIsSubmittingCounter] = useState(false);
+  const acceptCounterDialogRef = useRef(null);
+  const counterDialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = acceptCounterDialogRef.current;
+    if (acceptCounterTarget && dialog && !dialog.open) dialog.showModal();
+  }, [acceptCounterTarget]);
+
+  useEffect(() => {
+    const dialog = counterDialogRef.current;
+    if (counterTarget && dialog && !dialog.open) dialog.showModal();
+  }, [counterTarget]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3200);
+  };
+
+  const openCounterForm = (offer) => {
+    setCounterTarget(offer);
+    setCounterPrice(String(offer.counterPricePerKg || offer.offeredPricePerKg || ''));
+    setCounterTon(String(offer.counterTon || offer.volumeTon || offer.requestedTon || ''));
+    setCounterNotes('');
+    setCounterError('');
+  };
+
+  const closeCounterForm = () => {
+    if (isSubmittingCounter) return;
+    counterDialogRef.current?.close();
+    setCounterTarget(null);
+    setCounterError('');
+  };
+
+  const handleSubmitCounter = async (event) => {
+    event.preventDefault();
+    if (!counterTarget || isSubmittingCounter) return;
+
+    const price = Number(counterPrice);
+    const ton = Number(counterTon);
+    if (!counterPrice || !Number.isFinite(price) || price <= 0) {
+      setCounterError('Masukkan harga tawaran balik per kg yang valid.');
+      return;
+    }
+    if (!counterTon || !Number.isFinite(ton) || ton <= 0) {
+      setCounterError('Masukkan volume tawaran balik dalam ton yang valid.');
+      return;
+    }
+    const availableStock = Number(counterTarget.stockTon || 0);
+    if (availableStock > 0 && ton > availableStock) {
+      setCounterError(`Volume tawaran (${ton} Ton) melebihi stok yang tersedia (${availableStock} Ton).`);
+      return;
+    }
+
+    setIsSubmittingCounter(true);
+    try {
+      const saved = await onSubmitBuyerCounter?.({
+        offerId: counterTarget.id,
+        newPrice: price,
+        newTon: ton,
+        notes: counterNotes.trim()
+      });
+      if (!saved) throw new Error('Tawaran balik belum berhasil disimpan. Silakan coba lagi.');
+      counterDialogRef.current?.close();
+      setCounterTarget(null);
+      showToast('Tawaran balik berhasil dikirim kepada petani.');
+    } catch (error) {
+      setCounterError(error?.message || 'Gagal mengirim tawaran balik. Silakan coba lagi.');
+    } finally {
+      setIsSubmittingCounter(false);
+    }
+  };
+
+  const confirmAcceptCounterOffer = async () => {
+    if (!acceptCounterTarget || isAcceptingCounter) return;
+    setIsAcceptingCounter(true);
+    const offer = acceptCounterTarget;
+    // Tutup konfirmasi sebelum memproses agar dialog error stok dari parent
+    // tetap tampil di atas halaman bila stok database tidak mencukupi.
+    acceptCounterDialogRef.current?.close();
+    setAcceptCounterTarget(null);
+    try {
+      const accepted = await onAcceptCounterOffer?.(offer.id);
+      if (accepted) showToast('Tawaran balik diterima. Lanjutkan pembayaran.');
+    } catch (error) {
+      showToast(error?.message || 'Gagal menerima tawaran balik.');
+    } finally {
+      setIsAcceptingCounter(false);
+    }
   };
 
   const handleDeleteOffer = async () => {
@@ -61,11 +158,8 @@ export default function BuyerOfferList({
     setIsDeleting(true);
     try {
       const offerId = deleteConfirmOffer.id;
-      await supabase.from('offers').delete().eq('id', offerId);
-      await supabase.from('procurement_proposals').delete().eq('id', offerId);
-      if (deleteConfirmOffer.code) {
-        await supabase.from('procurement_proposals').delete().eq('code', deleteConfirmOffer.code);
-      }
+      const { error } = await supabase.from('offers').delete().eq('id', offerId);
+      if (error) throw error;
 
       setDeletedOfferIds(prev => new Set([...prev, offerId]));
       setSelectedOfferIds(prev => {
@@ -96,8 +190,8 @@ export default function BuyerOfferList({
     setIsDeleting(true);
     const idsToDelete = Array.from(selectedOfferIds);
     try {
-      await supabase.from('offers').delete().in('id', idsToDelete);
-      await supabase.from('procurement_proposals').delete().in('id', idsToDelete);
+      const { error } = await supabase.from('offers').delete().in('id', idsToDelete);
+      if (error) throw error;
 
       setDeletedOfferIds(prev => new Set([...prev, ...idsToDelete]));
       showToast(`${idsToDelete.length} riwayat penawaran berhasil dihapus permanen.`);
@@ -118,9 +212,9 @@ export default function BuyerOfferList({
   };
 
   // Status options for filter pills
-  const statusOptions = ['Semua', 'Menunggu', 'Diterima', 'Dibatalkan', 'Ditolak'];
+  const statusOptions = ['Semua', 'Menunggu Persetujuan', 'Tawar Balik', 'Diterima', 'Dibatalkan', 'Ditolak'];
 
-  // Normalize all offers & accepted proposals into a unified offer list
+  // Daftar ini hanya menampilkan penawaran pembeli yang ada di tabel offers.
   const allOffers = useMemo(() => {
     const list = [];
     const seenIds = new Set();
@@ -170,48 +264,57 @@ export default function BuyerOfferList({
         const isExpired = checkIsExpired();
 
         let normalizedStatus = 'Menunggu';
-        if (rawStatus === 'disetujui' || rawStatus === 'diterima' || rawStatus === 'selesai' || rawStatus === 'aktif') {
+        if (rawStatus === 'disetujui' || rawStatus === 'diterima' || rawStatus === 'selesai') {
           normalizedStatus = 'Diterima';
+        } else if (rawStatus === 'counter-offer') {
+          normalizedStatus = o.counterBy === 'pembeli' ? 'Menunggu Persetujuan' : 'Tawar Balik';
         } else if (isExpired || rawStatus === 'dibatalkan' || rawStatus === 'cancelled') {
           // Status kedaluwarsa di halaman petani diubah menjadi Dibatalkan di halaman daftar penawaran pembeli
           normalizedStatus = 'Dibatalkan';
         } else if (rawStatus === 'ditolak' || rawStatus === 'rejected') {
           normalizedStatus = 'Ditolak';
         } else {
-          normalizedStatus = 'Menunggu';
+          normalizedStatus = 'Menunggu Persetujuan';
         }
 
-        const volTon = Number(o.requestedTon || (o.requestedKg ? o.requestedKg / 1000 : 2));
+        const volTon = Number(o.requestedTon || (o.requestedKg ? o.requestedKg / 1000 : 0));
         const volKg = Number(o.requestedKg || volTon * 1000);
-        const pricePerKg = Number(o.offeredPricePerKg || o.pricePerKg || 110000);
+        const pricePerKg = Number(o.counterPricePerKg || o.offeredPricePerKg || o.pricePerKg || 0);
         const total = Number(o.totalOffer || (volKg * pricePerKg));
 
         list.push({
           id: o.id,
-          date: o.submittedDate || '26 Sep 2026',
-          validUntil: o.validUntil || '28 Sep 2026',
-          commodityName: o.commodityName || o.productName || 'Komoditas Pertanian',
+          code: o.code,
+          date: o.submittedDate || o.createdAt || '—',
+          validUntil: o.validUntil || '—',
+          commodityName: o.commodityName || o.productName || 'Komoditas',
           category: o.category || 'Perkebunan',
           commodityImage: o.image || o.commodityImage || 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=400&auto=format&fit=crop&q=80',
-          farmerGroup: o.farmerGroup || 'Poktan Ranowangko Langowan',
-          farmerLeader: o.farmerLeader || 'Hengky Mandagi, S.P.',
-          farmerAvatar: o.farmerAvatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=160&auto=format&fit=crop&q=80',
-          location: o.location || 'Minahasa, Sulawesi Utara',
+          farmerGroup: o.farmerGroup || 'Kelompok Tani',
+          farmerLeader: o.farmerLeader || o.farmerName || 'Petani',
+          farmerAvatar: o.farmerAvatar || null,
+          location: o.location || '—',
           volumeTon: volTon,
           volumeKg: volKg,
+          stockTon: Number(o.stockTon ?? 0),
+          requestedTon: Number(o.requestedTon || volTon),
           offeredPricePerKg: pricePerKg,
           listingPricePerKg: Number(o.listingPricePerKg || pricePerKg),
           totalOffer: total,
-          paymentMethod: o.paymentMethod || 'Transfer Bank (VA Escrow)',
-          notes: o.notes || 'Saya berminat membeli dalam jumlah besar dan berharap dapat memperoleh harga grosir.',
-          rejectionReason: o.rejectionReason || (normalizedStatus === 'Ditolak' ? 'Kapasitas gudang dan armada pengangkutan telah penuh untuk periode panen ini.' : null),
-          status: normalizedStatus
+          paymentMethod: o.paymentMethod || '—',
+          notes: o.notes || '',
+          rejectionReason: o.rejectionReason || null,
+          status: normalizedStatus,
+          counterBy: o.counterBy,
+          counterNotes: o.counterNotes,
+          counterPricePerKg: o.counterPricePerKg,
+          counterTon: o.counterTon
         });
       });
     }
 
     return list;
-  }, [offers, transactions]);
+  }, [offers, transactions, deletedOfferIds]);
 
   // Filter & Search
   const filteredOffers = useMemo(() => {
@@ -231,7 +334,7 @@ export default function BuyerOfferList({
     return allOffers.reduce((sum, item) => sum + (Number(item.totalOffer) || 0), 0);
   }, [allOffers]);
 
-  const countMenunggu = useMemo(() => allOffers.filter(i => i.status === 'Menunggu').length, [allOffers]);
+  const countMenunggu = useMemo(() => allOffers.filter(i => i.status === 'Menunggu Persetujuan').length, [allOffers]);
   const countDiterima = useMemo(() => allOffers.filter(i => i.status === 'Diterima').length, [allOffers]);
   const countDibatalkan = useMemo(() => allOffers.filter(i => i.status === 'Dibatalkan').length, [allOffers]);
   const countDitolak = useMemo(() => allOffers.filter(i => i.status === 'Ditolak').length, [allOffers]);
@@ -301,8 +404,14 @@ export default function BuyerOfferList({
     setDetailModalOpen(true);
   };
 
-  const handleCancel = (offerId) => {
-    if (window.confirm('Apakah Anda yakin ingin membatalkan penawaran ini?')) {
+  const handleCancel = async (offerId) => {
+    const confirmed = await appConfirm({
+      title: 'Batalkan Penawaran?',
+      message: 'Penawaran ini akan dibatalkan dan statusnya diperbarui. Anda dapat mengajukan penawaran baru nanti.',
+      tone: 'warning',
+      confirmLabel: 'Ya, Batalkan'
+    });
+    if (confirmed) {
       if (onCancelOffer) {
         onCancelOffer(offerId);
       }
@@ -433,7 +542,7 @@ export default function BuyerOfferList({
             {/* Header */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '36px 1.4fr 1.3fr 0.95fr 0.75fr 1fr 0.8fr 0.75fr 0.65fr',
+              gridTemplateColumns: OFFER_LIST_GRID_COLUMNS,
               gap: '0.75rem',
               alignItems: 'center',
               padding: '0.6rem 1.25rem',
@@ -493,7 +602,8 @@ export default function BuyerOfferList({
               </div>
             ) : pagedOffers.length > 0 ? (
               pagedOffers.map((item) => {
-                const isMenunggu = item.status === 'Menunggu';
+                const isMenunggu = item.status === 'Menunggu Persetujuan';
+                const isCounterOffer = item.status === 'Tawar Balik';
                 const isDiterima = item.status === 'Diterima';
                 const isDibatalkan = item.status === 'Dibatalkan';
                 const isDitolak = item.status === 'Ditolak';
@@ -506,7 +616,7 @@ export default function BuyerOfferList({
                     onClick={() => handleOpenDetail(item)}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: '36px 1.4fr 1.3fr 0.95fr 0.75fr 1fr 0.8fr 0.75fr 0.65fr',
+                      gridTemplateColumns: OFFER_LIST_GRID_COLUMNS,
                       gap: '0.75rem',
                       alignItems: 'center',
                       padding: '0.7rem 1.25rem',
@@ -630,6 +740,8 @@ export default function BuyerOfferList({
                           fontSize: '0.7rem',
                           background: isDiterima
                             ? 'rgba(16, 185, 129, 0.12)'
+                            : isCounterOffer
+                            ? 'rgba(139, 92, 246, 0.12)'
                             : isMenunggu
                             ? 'rgba(245, 158, 11, 0.14)'
                             : isDibatalkan
@@ -637,6 +749,8 @@ export default function BuyerOfferList({
                             : 'rgba(239, 68, 68, 0.10)',
                           color: isDiterima
                             ? '#059669'
+                            : isCounterOffer
+                            ? '#7c3aed'
                             : isMenunggu
                             ? '#b45309'
                             : isDibatalkan
@@ -646,6 +760,7 @@ export default function BuyerOfferList({
                         }}
                       >
                         {isDiterima && <CheckCircle size={12} weight="fill" />}
+                        {isCounterOffer && <ArrowsClockwise size={12} weight="bold" />}
                         {isMenunggu && <Clock size={12} weight="bold" />}
                         {isDibatalkan && <X size={12} weight="bold" />}
                         {isDitolak && <XCircle size={12} weight="fill" />}
@@ -654,8 +769,23 @@ export default function BuyerOfferList({
                     </div>
 
                     {/* Aksi */}
-                    <div style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                      {(isDibatalkan || isDitolak) ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px' }} onClick={(e) => e.stopPropagation()}>
+                      {isCounterOffer ? (
+                        <>
+                          <button type="button" onClick={async () => {
+                            const rejected = await onRejectCounterOffer?.(item.id);
+                            if (rejected) showToast('Tawaran balik ditolak dan pembelian dibatalkan.');
+                          }} style={{ padding: '0.32rem 0.55rem', fontSize: '0.72rem', fontWeight: 800, borderRadius: '7px', border: '1px solid #fecaca', background: '#fff1f2', color: '#dc2626', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Tolak
+                          </button>
+                          <button type="button" onClick={() => openCounterForm(item)} style={{ padding: '0.32rem 0.55rem', fontSize: '0.72rem', fontWeight: 800, borderRadius: '7px', border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <Handshake size={13} weight="bold" /> Tawar Balik
+                          </button>
+                          <button type="button" onClick={() => setAcceptCounterTarget(item)} style={{ padding: '0.32rem 0.6rem', fontSize: '0.72rem', fontWeight: 800, borderRadius: '7px', border: '1px solid #10b981', background: '#ecfdf5', color: '#047857', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                            Terima
+                          </button>
+                        </>
+                      ) : (isDibatalkan || isDitolak) ? (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -894,7 +1024,9 @@ export default function BuyerOfferList({
                 borderRadius: '10px',
                 background: selectedOffer.status === 'Diterima'
                   ? 'rgba(16, 185, 129, 0.08)'
-                  : selectedOffer.status === 'Menunggu'
+                  : selectedOffer.status === 'Tawar Balik'
+                  ? 'rgba(139, 92, 246, 0.08)'
+                  : selectedOffer.status === 'Menunggu Persetujuan'
                   ? 'rgba(245, 158, 11, 0.08)'
                   : selectedOffer.status === 'Dibatalkan'
                   ? 'rgba(100, 116, 139, 0.08)'
@@ -902,7 +1034,9 @@ export default function BuyerOfferList({
                 border: `1px solid ${
                   selectedOffer.status === 'Diterima'
                     ? 'rgba(16, 185, 129, 0.25)'
-                    : selectedOffer.status === 'Menunggu'
+                    : selectedOffer.status === 'Tawar Balik'
+                    ? 'rgba(139, 92, 246, 0.25)'
+                    : selectedOffer.status === 'Menunggu Persetujuan'
                     ? 'rgba(245, 158, 11, 0.25)'
                     : selectedOffer.status === 'Dibatalkan'
                     ? 'rgba(100, 116, 139, 0.25)'
@@ -916,14 +1050,17 @@ export default function BuyerOfferList({
                     fontSize: '0.95rem',
                     color: selectedOffer.status === 'Diterima'
                       ? '#059669'
-                      : selectedOffer.status === 'Menunggu'
+                      : selectedOffer.status === 'Tawar Balik'
+                      ? '#7c3aed'
+                      : selectedOffer.status === 'Menunggu Persetujuan'
                       ? '#b45309'
                       : selectedOffer.status === 'Dibatalkan'
                       ? '#64748b'
                       : '#dc2626'
                   }}>
                     {selectedOffer.status === 'Diterima' && 'Penawaran Telah Diterima Petani'}
-                    {selectedOffer.status === 'Menunggu' && 'Sedang Ditinjau oleh Kelompok Tani'}
+                    {selectedOffer.status === 'Menunggu Persetujuan' && 'Menunggu Persetujuan Petani'}
+                    {selectedOffer.status === 'Tawar Balik' && 'Petani Mengajukan Tawaran Balik'}
                     {selectedOffer.status === 'Ditolak' && 'Penawaran Ditolak oleh Petani'}
                     {selectedOffer.status === 'Dibatalkan' && 'Penawaran Dibatalkan (Masa Berlaku Telah Kedaluwarsa)'}
                   </div>
@@ -1051,7 +1188,7 @@ export default function BuyerOfferList({
               </button>
 
               {/* Aksi jika Menunggu */}
-              {selectedOffer.status === 'Menunggu' && (
+              {selectedOffer.status === 'Menunggu Persetujuan' && (
                 <button 
                   type="button" 
                   onClick={() => handleCancel(selectedOffer.id)}
@@ -1068,6 +1205,23 @@ export default function BuyerOfferList({
                 >
                   Batalkan Penawaran
                 </button>
+              )}
+
+              {selectedOffer.status === 'Tawar Balik' && (
+                <>
+                  <button type="button" className="clone-btn-primary" onClick={async () => {
+                    const accepted = await onAcceptCounterOffer?.(selectedOffer.id);
+                    if (accepted) { setDetailModalOpen(false); setSelectedOffer(null); }
+                  }} style={{ padding: '0.55rem 1rem', fontSize: '0.85rem' }}>
+                    Terima Tawaran Balik
+                  </button>
+                  <button type="button" className="clone-btn-secondary" onClick={async () => {
+                    const rejected = await onRejectCounterOffer?.(selectedOffer.id);
+                    if (rejected) { setDetailModalOpen(false); setSelectedOffer(null); }
+                  }} style={{ padding: '0.55rem 1rem', fontSize: '0.85rem', color: '#dc2626' }}>
+                    Tolak & Batalkan Pembelian
+                  </button>
+                </>
               )}
 
               {/* Aksi jika Diterima */}
@@ -1335,6 +1489,131 @@ export default function BuyerOfferList({
             </div>
           </div>
         </div>
+      )}
+
+      {counterTarget && (
+        <dialog
+          ref={counterDialogRef}
+          className="farmer-modal-card buyer-counter-dialog"
+          onClose={() => setCounterTarget(null)}
+          aria-labelledby="buyer-counter-title"
+        >
+          <div className="farmer-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)', marginBottom: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #fde68a' }}>
+                <Handshake size={20} color="#b45309" weight="bold" />
+              </div>
+              <div>
+                <h2 id="buyer-counter-title" className="farmer-modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>Tawar Balik Penawaran (Counter Offer)</h2>
+                <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>Ajukan harga dan tonase baru kepada petani</span>
+              </div>
+            </div>
+            <button type="button" onClick={closeCounterForm} className="farmer-modal-close-btn" aria-label="Tutup form tawar balik" disabled={isSubmittingCounter}><X size={18} /></button>
+          </div>
+
+          <form onSubmit={handleSubmitCounter} aria-labelledby="buyer-counter-title" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ padding: '0.85rem 1rem', background: 'var(--bg-canvas-subtle)', borderRadius: '10px', border: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+              <div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Komoditas</div>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{counterTarget.commodityName}</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>Petani: {counterTarget.farmerGroup || counterTarget.farmerLeader || 'Petani'}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Stok Tercatat</div>
+                <div style={{ fontWeight: 800, fontSize: '0.92rem', color: '#5452f6' }}>{Number(counterTarget.stockTon || 0).toLocaleString('id-ID')} Ton</div>
+              </div>
+            </div>
+
+            <div style={{ padding: '0.75rem 1rem', background: 'rgba(84, 82, 246, 0.05)', borderRadius: '10px', border: '1px solid rgba(84, 82, 246, 0.2)', fontSize: '0.8rem' }}>
+              <span style={{ color: 'var(--text-secondary)' }}>Penawaran saat ini: </span>
+              <strong>{Number(counterTarget.counterTon || counterTarget.volumeTon || counterTarget.requestedTon || 0).toLocaleString('id-ID')} Ton</strong> @ <strong>Rp {Number(counterTarget.counterPricePerKg || counterTarget.offeredPricePerKg || 0).toLocaleString('id-ID')}/kg</strong>
+            </div>
+
+            {counterError && <div id="buyer-counter-error" role="alert" style={{ padding: '0.65rem 0.85rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#dc2626', fontSize: '0.78rem', fontWeight: 600 }}>{counterError}</div>}
+
+            <div>
+              <label htmlFor="buyer-counter-price" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '5px' }}>Harga Tawar Balik per kg (Rp) *</label>
+              <input id="buyer-counter-price" type="number" min="1" step="1" required value={counterPrice} onChange={(e) => { setCounterPrice(e.target.value); setCounterError(''); }} placeholder="Misal: 28000" aria-invalid={counterError.startsWith('Masukkan harga')} aria-describedby={counterError ? 'buyer-counter-error' : undefined} style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-canvas)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', boxSizing: 'border-box' }} />
+            </div>
+
+            <div>
+              <label htmlFor="buyer-counter-ton" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '5px' }}>Volume Tawar Balik (Ton) *</label>
+              <input id="buyer-counter-ton" type="number" min="0.1" step="0.1" required value={counterTon} onChange={(e) => { setCounterTon(e.target.value); setCounterError(''); }} placeholder="Misal: 5" aria-invalid={counterError.startsWith('Masukkan volume') || counterError.startsWith('Volume tawaran')} aria-describedby={counterError ? 'buyer-counter-error' : undefined} style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-canvas)', fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', boxSizing: 'border-box' }} />
+            </div>
+
+            <div style={{ padding: '0.85rem 1rem', background: '#fffbeb', borderRadius: '10px', border: '1px solid #fde68a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#b45309' }}>Total Nilai Tawaran Baru:</span>
+              <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#b45309', fontFamily: 'var(--font-mono, sans-serif)' }}>Rp {((Number(counterTon) || 0) * 1000 * (Number(counterPrice) || 0)).toLocaleString('id-ID')}</span>
+            </div>
+
+            <div>
+              <label htmlFor="buyer-counter-notes" style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '5px' }}>Catatan untuk Petani (Opsional)</label>
+              <textarea id="buyer-counter-notes" rows={3} value={counterNotes} onChange={(e) => setCounterNotes(e.target.value)} placeholder="Tambahkan catatan untuk petani" style={{ width: '100%', padding: '0.6rem 0.85rem', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-canvas)', fontSize: '0.82rem', color: 'var(--text-primary)', boxSizing: 'border-box', resize: 'vertical' }} />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '0.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-subtle)' }}>
+              <button type="button" onClick={closeCounterForm} disabled={isSubmittingCounter} className="btn btn-ghost" style={{ fontSize: '0.84rem', padding: '0.5rem 1.1rem' }}>Batal</button>
+              <button type="submit" disabled={isSubmittingCounter} style={{ padding: '0.55rem 1.35rem', borderRadius: '9px', border: 'none', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: 800, fontSize: '0.84rem', cursor: isSubmittingCounter ? 'wait' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 8px rgba(217, 119, 6, 0.3)' }}>
+                {isSubmittingCounter ? <><ArrowsClockwise size={16} className="animate-spin" /><span>Mengirim...</span></> : <><Handshake size={16} weight="bold" /><span>Kirim Tawaran Balik</span></>}
+              </button>
+            </div>
+          </form>
+        </dialog>
+      )}
+
+      {acceptCounterTarget && (
+        <dialog ref={acceptCounterDialogRef} className="farmer-modal-card accept-offer-modal buyer-offer-native-dialog" onClose={() => setAcceptCounterTarget(null)} aria-labelledby="buyer-accept-counter-title">
+            <div className="farmer-modal-header accept-offer-header">
+              <div className="accept-offer-heading-group">
+                <div className="accept-offer-icon"><CheckCircle size={23} color="#059669" weight="fill" /></div>
+                <div className="accept-offer-heading-copy">
+                  <h2 id="buyer-accept-counter-title" className="farmer-modal-title accept-offer-title">Terima Tawaran Balik?</h2>
+                  <p className="farmer-modal-sub accept-offer-sub">Periksa kembali harga dan jumlah sebelum menyetujui tawaran petani.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => acceptCounterDialogRef.current?.close()} className="farmer-modal-close-btn accept-offer-close" aria-label="Tutup dialog" disabled={isAcceptingCounter}><X size={18} /></button>
+            </div>
+            <div className="accept-offer-content">
+              <div className="accept-offer-summary">
+                <div className="accept-offer-product">
+                  <span className="accept-offer-label">Komoditas · Petani</span>
+                  <div className="accept-offer-product-name">{acceptCounterTarget.commodityName}</div>
+                  <span style={{ fontSize: '.78rem', color: 'var(--text-secondary)' }}>{acceptCounterTarget.farmerGroup}</span>
+                </div>
+                <div className="accept-offer-metric">
+                  <span className="accept-offer-label">Volume Disepakati</span>
+                  <div className="accept-offer-value quantity">{Number(acceptCounterTarget.counterTon || acceptCounterTarget.volumeTon || acceptCounterTarget.requestedTon || 0).toLocaleString('id-ID')} Ton</div>
+                </div>
+                <div className="accept-offer-metric">
+                  <span className="accept-offer-label">Harga per kg</span>
+                  <div className="accept-offer-value price">Rp {Number(acceptCounterTarget.counterPricePerKg || acceptCounterTarget.offeredPricePerKg || 0).toLocaleString('id-ID')}</div>
+                </div>
+                <div className="accept-offer-metric total">
+                  <span className="accept-offer-label">Total Penawaran</span>
+                  <div className="accept-offer-value total-value">Rp {((Number(acceptCounterTarget.counterTon || acceptCounterTarget.volumeTon || acceptCounterTarget.requestedTon || 0) * 1000) * Number(acceptCounterTarget.counterPricePerKg || acceptCounterTarget.offeredPricePerKg || 0)).toLocaleString('id-ID')}</div>
+                </div>
+                <div className="accept-offer-metric">
+                  <span className="accept-offer-label">Stok tercatat</span>
+                  <div className="accept-offer-value">{Number(acceptCounterTarget.stockTon || 0).toLocaleString('id-ID')} Ton</div>
+                </div>
+                <div className="accept-offer-metric payment">
+                  <span className="accept-offer-label">Metode Pembayaran</span>
+                  <div className="accept-offer-value payment-value">{acceptCounterTarget.paymentMethod || 'Transfer Bank'}</div>
+                </div>
+              </div>
+              {Number(acceptCounterTarget.stockTon || 0) < Number(acceptCounterTarget.counterTon || acceptCounterTarget.volumeTon || acceptCounterTarget.requestedTon || 0) && (
+                <p role="status" style={{ margin: '.75rem 0 0', padding: '.7rem .85rem', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: '.8rem', fontWeight: 650 }}>
+                  Stok yang terbaca saat ini tidak mencukupi. Persetujuan akan ditolak oleh sistem sampai stok komoditas diperbarui oleh petani.
+                </p>
+              )}
+            </div>
+            <div className="accept-offer-footer">
+              <button type="button" onClick={() => acceptCounterDialogRef.current?.close()} disabled={isAcceptingCounter} className="btn btn-ghost" style={{ fontSize: '.82rem', padding: '.5rem 1.1rem' }}>Batal</button>
+              <button type="button" onClick={confirmAcceptCounterOffer} disabled={isAcceptingCounter} className="accept-offer-confirm" autoFocus>
+                {isAcceptingCounter ? 'Memproses...' : <><CheckCircle size={16} weight="bold" /><span>Terima Tawaran</span></>}
+              </button>
+            </div>
+        </dialog>
       )}
 
       {/* Floating Toast Notification */}

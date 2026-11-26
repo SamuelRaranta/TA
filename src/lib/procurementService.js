@@ -80,7 +80,8 @@ export const mapProposalToOfferItem = (proposal) => {
     buyerId: proposal.buyerId || null,
     proposalDbId: proposal.dbId || null,
     proposalCode: proposal.code || proposal.id,
-    commodityId: proposal.id,
+    // ID proposal adalah baris procurement_proposals, bukan komoditas petani.
+    commodityId: null,
     commodityName: proposal.commodityName,
     category: proposal.category || 'Hortikultura & Sayur',
     farmerGroup: proposal.target || 'Semua Petani',

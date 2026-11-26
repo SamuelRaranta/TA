@@ -23,4 +23,8 @@ export const supabase = createClient(
   supabaseAnonKey || 'placeholder-anon-key'
 );
 
+if (typeof window !== 'undefined') {
+  window.__supabase = supabase;
+}
+
 export default supabase;

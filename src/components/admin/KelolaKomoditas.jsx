@@ -112,50 +112,6 @@ export default function AdminCommodityModeration() {
     return matchSearch && matchStatus;
   });
 
-  const pendingCount = items.filter(i => i.status === 'Menunggu Persetujuan' || i.status === 'Menunggu Moderasi').length;
-  const activeCount = items.filter(i => i.status === 'Aktif' || i.status === 'Disetujui').length;
-  const inactiveCount = items.filter(i => i.status === 'Tidak Aktif' || i.status === 'Ditolak').length;
-
-  // 4 Status Summary Cards (Total Komoditas, Komoditas Aktif, Komoditas Tidak Aktif, Menunggu Persetujuan)
-  const statusCards = [
-    {
-      id: 'total',
-      name: 'Total Komoditas',
-      filterValue: 'Semua',
-      count: items.length,
-      icon: Package,
-      iconColor: '#5452f6',
-      iconBg: 'rgba(84, 82, 246, 0.12)'
-    },
-    {
-      id: 'aktif',
-      name: 'Komoditas Aktif',
-      filterValue: 'Aktif',
-      count: activeCount,
-      icon: CheckCircle,
-      iconColor: '#10b981',
-      iconBg: 'rgba(16, 185, 129, 0.12)'
-    },
-    {
-      id: 'tidak-aktif',
-      name: 'Komoditas Tidak Aktif',
-      filterValue: 'Tidak Aktif',
-      count: inactiveCount,
-      icon: XCircle,
-      iconColor: '#ef4444',
-      iconBg: 'rgba(239, 68, 68, 0.12)'
-    },
-    {
-      id: 'menunggu',
-      name: 'Menunggu Persetujuan',
-      filterValue: 'Menunggu',
-      count: pendingCount,
-      icon: Clock,
-      iconColor: '#f59e0b',
-      iconBg: 'rgba(245, 158, 11, 0.12)'
-    }
-  ];
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
       
@@ -171,47 +127,7 @@ export default function AdminCommodityModeration() {
         </div>
       </div>
 
-      {/* 2. 4 Cards Ringkasan Status Komoditas (Ukuran seperti Gambar 2) */}
-      <div className="category-summary-cards-grid admin-summary-grid">
-        {statusCards.map((card) => {
-          const IconComponent = card.icon;
-          const isActive = selectedStatusFilter === card.filterValue;
-
-          return (
-            <button
-              key={card.id}
-              type="button"
-              className={`category-summary-card ${isActive ? 'active' : ''}`}
-              onClick={() => setSelectedStatusFilter(card.filterValue)}
-              title={`Filter berdasarkan ${card.name}`}
-            >
-              <div 
-                className="category-card-icon-wrap"
-                style={{ background: card.iconBg, color: card.iconColor }}
-              >
-                <IconComponent size={18} weight={isActive ? 'fill' : 'bold'} />
-              </div>
-              <div className="category-card-text-wrap">
-                <div className="category-card-count">
-                  <span>
-                    {isLoading ? (
-                      <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '2rem', height: '1.2rem', borderRadius: '4px' }} />
-                    ) : (
-                      card.count
-                    )}
-                  </span>
-                  <span className="category-card-count-unit">Komoditas</span>
-                </div>
-                <div className="category-card-name" title={card.name}>
-                  {card.name}
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 3. Search Bar Seperti Gambar 2 (Pill Search Input + Filter) */}
+      {/* Search Bar */}
       <div style={{ marginBottom: '0.5rem' }}>
         <PillSearchBar
           value={searchTerm}

@@ -37,6 +37,7 @@ import {
   deleteProcurementInSupabase,
   subscribeProcurementProposals
 } from '../../lib/procurementService';
+import { appToast, appConfirm } from '../../lib/appFeedback';
 
 export default function BuyerSubmitOffer({
   proposals = [],
@@ -134,11 +135,11 @@ export default function BuyerSubmitOffer({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Mohon pilih file gambar yang valid (JPG, PNG, WebP).');
+        appToast('Mohon pilih file gambar yang valid (JPG, PNG, WebP).', 'error');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file gambar maksimal 5MB.');
+        appToast('Ukuran file gambar maksimal 5MB.', 'error');
         return;
       }
       const reader = new FileReader();
@@ -411,7 +412,13 @@ export default function BuyerSubmitOffer({
 
   // Cancel Proposal (Changes status to 'Tidak Aktif' in Supabase)
   const handleCancelProposal = async (proposalId) => {
-    if (window.confirm('Apakah Anda yakin ingin membatalkan proposal penawaran ini? Status proposal akan diubah menjadi Tidak Aktif.')) {
+    const confirmed = await appConfirm({
+      title: 'Batalkan Proposal Penawaran?',
+      message: 'Status proposal akan diubah menjadi Tidak Aktif dan tidak dapat diproses lebih lanjut.',
+      tone: 'warning',
+      confirmLabel: 'Ya, Batalkan'
+    });
+    if (confirmed) {
       setActionErrorMsg('');
       const previousList = proposalList;
       const cancelledState = {
@@ -442,7 +449,13 @@ export default function BuyerSubmitOffer({
 
   // Hapus permanen proposal 'Tidak Aktif' dari database (tombol Hapus sebelumnya hanya update ulang!).
   const handleDeleteProposal = async (proposalId) => {
-    if (window.confirm('Hapus permanen proposal ini dari database? Tindakan ini tidak dapat dibatalkan.')) {
+    const confirmed = await appConfirm({
+      title: 'Hapus Proposal Permanen?',
+      message: 'Proposal ini akan dihapus dari database secara permanen. Tindakan ini tidak dapat dibatalkan.',
+      tone: 'danger',
+      confirmLabel: 'Ya, Hapus Permanen'
+    });
+    if (confirmed) {
       setActionErrorMsg('');
       const previousList = proposalList;
       setProposalList(prev => prev.filter(p => p.id !== proposalId));

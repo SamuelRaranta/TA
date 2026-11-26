@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowUpRight, 
   TrendUp, 
@@ -58,17 +58,49 @@ export default function FarmerCloneOverview({
   const komoditasSayaAktifCount = displayProducts.filter(p => p.status === 'Aktif' || p.status === 'Tersedia' || p.status === 'Disetujui').length;
   const displayName = farmerProfile?.name ? farmerProfile.name.split(' ')[0] : 'Petani';
 
-  // 6-Month Sales Wave Spline Data (Mar s/d Agu) matching Gambar 1
-  const months6Data = [
-    { month: 'Mar', trans: 165, prod: 30, date: '12 Mar 2026', blueY: 62, orangeY: 76 },
-    { month: 'Apr', trans: 150, prod: 28, date: '10 Apr 2026', blueY: 74, orangeY: 88 },
-    { month: 'Mei', trans: 175, prod: 35, date: '21 Mei 2026', blueY: 54, orangeY: 96 },
-    { month: 'Jun', trans: 190, prod: 38, date: '16 Jun 2026', blueY: 42, orangeY: 76 },
-    { month: 'Jul', trans: 205, prod: 40, date: '24 Jul 2026', blueY: 56, orangeY: 82 },
-    { month: 'Agu', trans: 222, prod: 44, date: '14 Agu 2026', blueY: 30, orangeY: 50 },
-  ];
+  // Ringkasan enam bulan dari transaksi dan komoditas yang tersimpan di database.
+  const months6Data = useMemo(() => {
+    const now = new Date();
+    const buckets = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+      return {
+        year: date.getFullYear(),
+        monthIndex: date.getMonth(),
+        month: date.toLocaleDateString('id-ID', { month: 'short' }).replace('.', ''),
+        date: date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+        trans: 0,
+        prod: 0
+      };
+    });
+    const addToMonth = (records, key) => {
+      records.forEach(record => {
+        const stamp = record.createdAt || record.created_at;
+        if (!stamp) return;
+        const date = new Date(stamp);
+        if (Number.isNaN(date.getTime())) return;
+        const bucket = buckets.find(item => item.year === date.getFullYear() && item.monthIndex === date.getMonth());
+        if (bucket) bucket[key] += 1;
+      });
+    };
+    addToMonth(displayTransactions, 'trans');
+    addToMonth(displayProducts, 'prod');
 
-  const [hoveredMonthIndex, setHoveredMonthIndex] = useState(5); // Default active at Agu (index 5)
+    const toY = (value, values) => {
+      const max = Math.max(...values, 0);
+      const min = Math.min(...values, 0);
+      if (max === min) return 60;
+      return 84 - ((value - min) / (max - min)) * 54;
+    };
+    const transactionValues = buckets.map(item => item.trans);
+    const productValues = buckets.map(item => item.prod);
+    return buckets.map(item => ({
+      ...item,
+      blueY: toY(item.trans, transactionValues),
+      orangeY: toY(item.prod, productValues)
+    }));
+  }, [displayTransactions, displayProducts]);
+
+  const [hoveredMonthIndex, setHoveredMonthIndex] = useState(5);
   const [activeTimeframe, setActiveTimeframe] = useState('7d'); // Timeframe filter in Gambar 3
 
   // Spline calculations

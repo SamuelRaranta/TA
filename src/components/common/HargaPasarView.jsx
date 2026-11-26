@@ -26,6 +26,7 @@ import {
   deleteMarketPriceFromSupabase,
   subscribeMarketPrices
 } from '../../lib/marketPriceService';
+import { appToast } from '../../lib/appFeedback';
 
 // Helper for currency formatting
 export const formatIDR = (num) => {
@@ -1157,7 +1158,7 @@ function EditHargaPasarModal({ item, onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!todayPrice || isNaN(todayPrice) || Number(todayPrice) <= 0) {
-      alert('Mohon masukkan harga hari ini yang valid.');
+      appToast('Mohon masukkan harga hari ini yang valid.', 'error');
       return;
     }
     const currentPriceNum = Number(todayPrice);
@@ -1291,7 +1292,7 @@ function AddCommodityModal({ onClose, onAdd }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!commodity || !todayPrice || isNaN(todayPrice)) {
-      alert('Mohon lengkapi nama komoditas dan harga.');
+      appToast('Mohon lengkapi nama komoditas dan harga terlebih dahulu.', 'error');
       return;
     }
 

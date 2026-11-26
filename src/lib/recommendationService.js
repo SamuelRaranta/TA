@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * SISTEM REKOMENDASI / SMART MATCHING - TANINIAGA
+ * SISTEM REKOMENDASI / SMART MATCHING - AGRICONNECT
  * Metode: Content-Based Filtering dengan Weighted Scoring
  * 
  * Deskripsi:

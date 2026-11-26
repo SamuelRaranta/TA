@@ -53,6 +53,78 @@ import { supabase } from '../../lib/supabaseClient';
 import { fetchMarketPricesFromSupabase, subscribeMarketPrices } from '../../lib/marketPriceService';
 import { fetchCommoditiesFromSupabase, subscribeCommodities } from '../../lib/commodityService';
 
+function CommodityIconOrThumbnail({ image, name, theme }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (!image || imgFailed) {
+    return (
+      <div 
+        className="clone-pending-kmd-icon"
+        style={{ background: theme.bg, color: theme.color }}
+      >
+        <Plant size={16} weight="bold" />
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className="clone-pending-kmd-icon"
+      style={{
+        background: '#f8fafc',
+        border: '1px solid var(--border-subtle, #e2e8f0)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <img 
+        src={image} 
+        alt={name || 'Komoditas'}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={() => setImgFailed(true)}
+      />
+    </div>
+  );
+}
+
+function LiveCommodityIconOrThumbnail({ image, name }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (!image || imgFailed) {
+    return (
+      <div
+        className="clone-live-icon-box"
+        style={{ background: '#faf5ff', borderColor: '#f3e8ff', color: '#9333ea' }}
+      >
+        <Package size={16} weight="bold" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="clone-live-icon-box"
+      style={{
+        background: '#f8fafc',
+        borderColor: 'var(--border-subtle, #e2e8f0)',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <img
+        src={image}
+        alt={name || 'Komoditas'}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        onError={() => setImgFailed(true)}
+      />
+    </div>
+  );
+}
+
 export default function AdminCloneOverview({ onNavigate, marketPrices: initialPrices }) {
   const [marketPrices, setMarketPrices] = useState(initialPrices || []);
 

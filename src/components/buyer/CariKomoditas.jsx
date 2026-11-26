@@ -12,7 +12,6 @@ import {
   X, 
   Plus, 
   Info, 
-  BuildingOffice, 
   CalendarCheck, 
   CalendarBlank, 
   ShieldCheck, 
@@ -239,9 +238,12 @@ export default function BuyerCatalog({
 
   const categories = ['Semua', 'Biji-Bijian & Palawija', 'Padi & Beras', 'Hortikultura & Sayur', 'Perkebunan'];
 
-  // Only display approved/active commodities in public catalog
+  // Katalog publik hanya menampilkan komoditas yang sudah disetujui admin.
   const activeCommodities = useMemo(() => {
-    return commodities.filter(c => c.status === 'Aktif' || c.status === 'Tersedia' || c.status === 'Disetujui');
+    return commodities.filter((commodity) => {
+      const status = String(commodity.status || '').trim().toLowerCase();
+      return ['aktif', 'tersedia', 'disetujui'].includes(status);
+    });
   }, [commodities]);
 
   // Pre-filter kandidat komoditas berdasarkan Kategori dan Search Term
@@ -850,7 +852,7 @@ export default function BuyerCatalog({
           <div style={{ marginBottom: '1.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>Ajukan Kebutuhan Pasokan Khusus (RFQ)</h2>
             <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', margin: '6px 0 0' }}>
-              Jika komoditas atau volume tonase yang Anda butuhkan belum tercantum di katalog, kirimkan permintaan pasokan ini. Tim TaniNiaga akan mencocokkan dengan sentra kelompok tani mitra resmi.
+              Jika komoditas atau volume tonase yang Anda butuhkan belum tercantum di katalog, kirimkan permintaan pasokan ini. Tim AgriConnect akan mencocokkan dengan sentra kelompok tani mitra resmi.
             </p>
           </div>
 
@@ -1720,59 +1722,25 @@ export default function BuyerCatalog({
 
       {/* ================= MODAL: PROFIL PETANI & ULASAN ================= */}
       {farmerProfileModalOpen && selectedFarmer && (
-        <div className="clone-modal-overlay" onClick={handleCloseFarmerProfile} style={{ zIndex: 1100 }}>
+        <div className="clone-modal-overlay farmer-profile-overlay" onClick={handleCloseFarmerProfile}>
           <div
-            className="clone-modal-card"
-            style={{
-              maxWidth: '680px',
-              width: '95%',
-              borderRadius: '16px',
-              overflow: 'hidden',
-              maxHeight: '88vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
-            }}
+            className="clone-modal-card farmer-profile-modal"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header Profil Petani */}
             <div
-              style={{
-                padding: '1.25rem 1.5rem',
-                background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
-                borderBottom: '1px solid var(--border-subtle, #e2e8f0)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                position: 'relative'
-              }}
+              className="farmer-profile-header"
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0 }}>
+              <div className="farmer-profile-identity">
                 {/* Avatar Petani Besar */}
                 <div
-                  style={{
-                    width: '64px',
-                    height: '64px',
-                    borderRadius: '50%',
-                    background: 'linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.5rem',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                    border: '3px solid #ffffff',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  }}
+                  className="farmer-profile-avatar"
                 >
                   {selectedFarmer.avatar ? (
                     <img
                       src={selectedFarmer.avatar}
                       alt={selectedFarmer.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      className="farmer-profile-avatar-image"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
                   ) : (
@@ -1781,44 +1749,22 @@ export default function BuyerCatalog({
                 </div>
 
                 {/* Info Text Petani */}
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary, #1e293b)' }}>
+                <div className="farmer-profile-copy">
+                  <div className="farmer-profile-name-row">
+                    <h3 className="farmer-profile-name">
                       {selectedFarmer.name}
                     </h3>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        background: '#ecfdf5',
-                        color: '#059669',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        border: '1px solid #a7f3d0'
-                      }}
-                    >
-                      <CheckCircle size={13} weight="fill" />
-                      Petani Terverifikasi
-                    </span>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--text-secondary, #64748b)', marginTop: '4px' }}>
-                    <BuildingOffice size={14} color="#64748b" />
-                    <span>{selectedFarmer.group || 'Kelompok Tani'}</span>
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.78rem', color: 'var(--text-muted, #94a3b8)', marginTop: '4px', flexWrap: 'wrap' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <MapPin size={13} color="#94a3b8" />
+                  <div className="farmer-profile-meta">
+                    <span className="farmer-profile-location">
+                      <MapPin size={14} aria-hidden="true" />
                       <span>{selectedFarmer.location || 'Minahasa, Sulawesi Utara'}</span>
                     </span>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#fef3c7', color: '#b45309', padding: '1px 7px', borderRadius: '8px', fontWeight: 700 }}>
-                      <Star size={12} weight="fill" color="#f59e0b" />
+                    <span className="farmer-profile-rating">
+                      <Star size={13} weight="fill" aria-hidden="true" />
                       <span>{Number(farmerReviewsData.average || selectedFarmer.rating || 5.0).toFixed(1)}</span>
-                      <span style={{ fontWeight: 500, color: '#92400e' }}>
+                      <span className="farmer-profile-review-count">
                         ({farmerReviewsData.totalCount || selectedFarmer.reviewsCount || 0} ulasan)
                       </span>
                     </span>
@@ -1829,10 +1775,10 @@ export default function BuyerCatalog({
               {/* Close Button */}
               <button
                 type="button"
-                className="clone-modal-close"
+                className="clone-modal-close farmer-profile-close"
                 onClick={handleCloseFarmerProfile}
                 title="Tutup Modal"
-                style={{ alignSelf: 'flex-start' }}
+                aria-label="Tutup profil petani"
               >
                 <X size={18} />
               </button>
@@ -1840,16 +1786,12 @@ export default function BuyerCatalog({
 
             {/* Navigation Tabs */}
             <div
-              style={{
-                display: 'flex',
-                borderBottom: '1px solid var(--border-subtle, #e2e8f0)',
-                padding: '0 1.5rem',
-                background: 'var(--bg-canvas-subtle, #f8fafc)',
-                gap: '1.25rem'
-              }}
+              className="farmer-profile-tabs"
             >
               <button
                 type="button"
+                className="farmer-profile-tab"
+                aria-pressed={activeProfileTab === 'komoditas'}
                 onClick={() => setActiveProfileTab('komoditas')}
                 style={{
                   padding: '0.8rem 0.25rem',
@@ -1874,6 +1816,8 @@ export default function BuyerCatalog({
 
               <button
                 type="button"
+                className="farmer-profile-tab"
+                aria-pressed={activeProfileTab === 'ulasan'}
                 onClick={() => setActiveProfileTab('ulasan')}
                 style={{
                   padding: '0.8rem 0.25rem',
@@ -1899,15 +1843,7 @@ export default function BuyerCatalog({
 
             {/* Modal Scrollable Body */}
             <div
-              className="clone-modal-body"
-              style={{
-                maxHeight: '60vh',
-                overflowY: 'auto',
-                padding: '1.25rem 1.5rem',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem'
-              }}
+              className="clone-modal-body farmer-profile-body"
             >
               {isLoadingFarmerData ? (
                 <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: 'var(--text-secondary, #64748b)' }}>
@@ -1983,7 +1919,6 @@ export default function BuyerCatalog({
                               <h4 style={{ margin: '0 0 0.4rem', fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)' }}>
                                 {item.name}
                               </h4>
-
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', background: 'var(--bg-canvas-subtle, #f8fafc)', padding: '6px 8px', borderRadius: '8px', marginBottom: '0.65rem' }}>
                                 <div>
                                   <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary, #64748b)', textTransform: 'uppercase', fontWeight: 600 }}>Stok</div>
@@ -2214,31 +2149,6 @@ export default function BuyerCatalog({
               )}
             </div>
 
-            {/* Modal Footer */}
-            <div
-              className="clone-modal-footer"
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '0.85rem 1.5rem',
-                borderTop: '1px solid var(--border-subtle, #e2e8f0)',
-                background: 'var(--bg-canvas-subtle, #f8fafc)'
-              }}
-            >
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #94a3b8)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ShieldCheck size={14} color="#10b981" weight="bold" />
-                <span>Petani Produsen Terverifikasi TaniNiaga Minahasa</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCloseFarmerProfile}
-                className="clone-btn-secondary"
-                style={{ padding: '0.45rem 1rem', fontSize: '0.84rem' }}
-              >
-                Tutup
-              </button>
-            </div>
           </div>
         </div>
       )}

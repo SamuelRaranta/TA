@@ -22,13 +22,14 @@ import {
   UploadSimple
 } from '@phosphor-icons/react';
 import { supabase } from '../../lib/supabaseClient';
+import { appToast, appConfirm } from '../../lib/appFeedback';
 
 // Mulai kosong + loading (jangan render cache/mock basi sebelum fetch baru).
 // Cache localStorage tidak lagi dipakai sebagai initial agar edit profil tidak terbaca sebagai data lama.
 export default function AdminVerificationView() {
   const [users, setUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('All Roles'); // 'All Roles' | 'Petani' | 'Pembeli' | 'Admin'
+  const [roleFilter, setRoleFilter] = useState('All Roles'); // 'All Roles' | 'Petani' | 'Pembeli'
   const [statusFilter, setStatusFilter] = useState('All Statuses'); // 'All Statuses' | 'Active' | 'Menunggu Persetujuan' | 'Inactive'
   const [isLoading, setIsLoading] = useState(true);
   const [isLiveSync, setIsLiveSync] = useState(false);
@@ -72,7 +73,7 @@ export default function AdminVerificationView() {
         const mapped = data.map((item, idx) => {
           let roleLabel = 'Petani';
           if (item.role) {
-            const r = item.role.toLowerCase();
+            const r = String(item.role).trim().toLowerCase();
             if (r === 'admin') roleLabel = 'Admin';
             else if (r === 'pembeli') roleLabel = 'Pembeli';
             else roleLabel = 'Petani';
@@ -90,7 +91,7 @@ export default function AdminVerificationView() {
           let userEmail = item.email;
           if (!userEmail) {
             const cleanSlug = (item.full_name || 'user').toLowerCase().replace(/[^a-z0-9]/g, '');
-            userEmail = `${cleanSlug || 'pengguna'}@taniniaga.id`;
+            userEmail = `${cleanSlug || 'pengguna'}@agriconnect.id`;
           }
 
           return {
@@ -107,7 +108,8 @@ export default function AdminVerificationView() {
           };
         });
 
-        setUsers(mapped);
+        // Akun admin tidak ditampilkan atau dihitung di halaman Kelola Pengguna.
+        setUsers(mapped.filter((user) => user.role !== 'Admin'));
         setIsLiveSync(true);
       } else {
         // DB kosong -> kosongkan (jangan pertahankan data lama di layar).
@@ -142,11 +144,11 @@ export default function AdminVerificationView() {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Mohon pilih file gambar yang valid (JPG, PNG, WebP).');
+        appToast('Mohon pilih file gambar yang valid (JPG, PNG, WebP).', 'error');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file gambar maksimal 5MB.');
+        appToast('Ukuran file gambar maksimal 5MB.', 'error');
         return;
       }
       const reader = new FileReader();
@@ -171,7 +173,7 @@ export default function AdminVerificationView() {
   // Filtered users logic
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      // Role filter ('Petani', 'Pembeli', 'Admin')
+      // Role filter ('Petani', 'Pembeli')
       if (roleFilter !== 'All Roles' && user.role !== roleFilter) {
         return false;
       }
@@ -217,7 +219,13 @@ export default function AdminVerificationView() {
   };
 
   const handleReject = async (userId) => {
-    if (window.confirm('Tolak pendaftaran akun pengguna ini? Status akan diubah menjadi Inactive.')) {
+    const confirmed = await appConfirm({
+      title: 'Tolak Pendaftaran Akun?',
+      message: 'Status akun pengguna akan diubah menjadi Inactive dan tidak dapat mengakses dashboard.',
+      tone: 'warning',
+      confirmLabel: 'Ya, Tolak'
+    });
+    if (confirmed) {
       setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: 'Inactive' } : u));
       setActiveActionId(null);
       try {
@@ -237,7 +245,13 @@ export default function AdminVerificationView() {
   };
 
   const handleDelete = async (userId) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus akun pengguna ini?')) {
+    const confirmed = await appConfirm({
+      title: 'Hapus Akun Pengguna?',
+      message: 'Akun pengguna ini akan dihapus dari sistem. Tindakan ini tidak dapat dibatalkan.',
+      tone: 'danger',
+      confirmLabel: 'Ya, Hapus Akun'
+    });
+    if (confirmed) {
       setUsers(prev => prev.filter(u => u.id !== userId));
       setActiveActionId(null);
       try {
@@ -324,7 +338,7 @@ export default function AdminVerificationView() {
     const newUser = {
       id: generatedUuid,
       name: formName || 'User Baru',
-      email: formEmail || `user${users.length + 1}@taniniaga.id`,
+      email: formEmail || `user${users.length + 1}@agriconnect.id`,
       role: formRole,
       status: formStatus,
       joined: 'Hari ini',
@@ -517,7 +531,7 @@ export default function AdminVerificationView() {
         {/* Filters Right */}
         <div className="um-filters-right">
           
-          {/* Dropdown Role (Petani, Pembeli, Admin) */}
+          {/* Dropdown Role (Petani, Pembeli) */}
           <select 
             className="um-select"
             value={roleFilter}
@@ -526,7 +540,6 @@ export default function AdminVerificationView() {
             <option value="All Roles">All Roles</option>
             <option value="Petani">Petani</option>
             <option value="Pembeli">Pembeli</option>
-            <option value="Admin">Admin</option>
           </select>
 
           {/* Dropdown Status */}

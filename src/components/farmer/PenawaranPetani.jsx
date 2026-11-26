@@ -25,11 +25,9 @@ import { supabase } from '../../lib/supabaseClient';
 import { 
   fetchOffersFromSupabase, 
   updateOfferInSupabase, 
-  createContractInSupabase,
   subscribeOffers 
 } from '../../lib/dealService';
 import { 
-  notifyOfferAccepted, 
   notifyOfferRejected,
   notifyOfferCountered 
 } from '../../lib/notificationService';
@@ -527,43 +525,17 @@ export default function PenawaranPetani({
     setOfferList(prev => prev.map(o => o.id === offerId ? { ...o, status: 'Diterima', isAutoAccepted: false } : o));
 
     try {
-      // 2. Update Supabase offers table
-      await updateOfferInSupabase(offerId, {
-        status: 'Disetujui',
-        acceptedAt: new Date().toISOString()
-      });
-
-      // 3. Create digital Binding Agreement contract in Supabase if not existing
       const tonVal = Number(targetOffer.counterTon || targetOffer.requestedTon || 1);
       const priceVal = Number(targetOffer.counterPricePerKg || targetOffer.offeredPricePerKg || 0);
       const totalContractVal = tonVal * 1000 * priceVal;
-
-      await createContractInSupabase({
-        offerId: targetOffer.id,
-        commodityId: targetOffer.commodityId,
-        commodityName: targetOffer.commodityName || 'Komoditas',
-        buyerId: targetOffer.buyerId,
-        farmerId: targetOffer.farmerId || currentFarmerId,
-        farmerName: farmerProfile?.groupName || 'Kelompok Tani',
-        buyerName: targetOffer.buyerCompany || targetOffer.buyerName,
-        tonnage: tonVal,
-        pricePerKg: priceVal,
-        totalValue: targetOffer.totalOfferValue || totalContractVal,
-        pickupSchedule: targetOffer.pickupDate || '7 Hari ke Depan',
-        pickupLocation: targetOffer.pickupLocation || farmerProfile?.location || 'Minahasa',
-        paymentMethod: targetOffer.paymentMethod || 'Transfer Bank'
-      });
-
-      // 4. Trigger notification to buyer
-      notifyOfferAccepted({
-        buyerId: targetOffer.buyerId,
-        commodityName: targetOffer.commodityName || 'Komoditas',
-        offerId: targetOffer.id
-      }).catch(e => console.warn('[PenawaranPetani] Notification accept error:', e));
-
-      // 5. Parent callback & dashboard refresh
+      // Parent handler persists the status, reserves stock, and creates one contract
+      // plus transaction. Do not create duplicate contracts from this component.
       if (onAcceptOffer) {
-        onAcceptOffer(offerId, { ...targetOffer, status: 'Diterima', requestedTon: tonVal, offeredPricePerKg: priceVal, totalOfferValue: totalContractVal });
+        const accepted = await onAcceptOffer(offerId, { ...targetOffer, status: 'Diterima', requestedTon: tonVal, offeredPricePerKg: priceVal, totalOfferValue: totalContractVal });
+        if (accepted === false) throw new Error('Penawaran belum berhasil diproses ke database.');
+      } else {
+        const saved = await updateOfferInSupabase(offerId, { status: 'Disetujui', acceptedAt: new Date().toISOString() });
+        if (!saved.data) throw new Error(saved.error || 'Gagal menyimpan status penawaran.');
       }
       if (onRefreshOffers) {
         onRefreshOffers();
@@ -578,6 +550,7 @@ export default function PenawaranPetani({
       if (detailModalOpen) setDetailModalOpen(false);
     } catch (err) {
       console.error('[PenawaranPetani] Gagal menerima penawaran:', err);
+      if (onRefreshOffers) onRefreshOffers();
       showToast('Gagal memproses penerimaan penawaran. Silakan coba lagi.', 'error');
     } finally {
       setIsProcessing(false);
@@ -659,13 +632,14 @@ export default function PenawaranPetani({
 
     try {
       // 2. Update Supabase offers table
-      await updateOfferInSupabase(offerId, {
+      const saved = await updateOfferInSupabase(offerId, {
         status: 'Counter-Offer',
         counterPricePerKg: priceNum,
         counterTon: tonNum,
         counterNotes: counterNotes.trim() || null,
         counterBy: 'petani'
       });
+      if (!saved.data) throw new Error(saved.error || 'Gagal menyimpan tawaran balik.');
 
       // 3. Trigger notification to buyer
       notifyOfferCountered({
@@ -712,11 +686,12 @@ export default function PenawaranPetani({
 
     try {
       // 2. Update Supabase offers table
-      await updateOfferInSupabase(offerId, {
+      const saved = await updateOfferInSupabase(offerId, {
         status: 'Ditolak',
         rejectionReason: finalReason,
         rejectedAt: new Date().toISOString()
       });
+      if (!saved.data) throw new Error(saved.error || 'Gagal menyimpan penolakan.');
 
       // 3. Trigger notification to buyer
       notifyOfferRejected({
@@ -1115,6 +1090,7 @@ export default function PenawaranPetani({
                         <img
                           src={offer.buyerAvatar}
                           alt={buyerName}
+                          onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = DEFAULT_AVATAR; }}
                           style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '1.5px solid #ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.08)' }}
                         />
                       ) : (
@@ -1140,6 +1116,7 @@ export default function PenawaranPetani({
                         <img
                           src={offer.commodityImage}
                           alt={offer.commodityName}
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           style={{ width: '34px', height: '34px', borderRadius: '8px', objectFit: 'cover', border: '1px solid var(--border-subtle)', flexShrink: 0 }}
                         />
                       ) : (
@@ -1389,88 +1366,73 @@ export default function PenawaranPetani({
 
       {/* ================= TASK 14: MODAL TERIMA PENAWARAN ================= */}
       {acceptModalOpen && selectedOfferForAccept && (
-        <div className="farmer-modal-overlay" onClick={handleCloseAcceptModal} style={{ zIndex: 1100 }}>
-          <div className="farmer-modal-card" style={{ maxWidth: '520px', width: '92%', borderRadius: '16px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="farmer-modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CheckCircle size={24} color="#059669" weight="fill" />
+        <div className="farmer-modal-overlay accept-offer-overlay" onClick={handleCloseAcceptModal}>
+          <div className="farmer-modal-card accept-offer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="farmer-modal-header accept-offer-header">
+              <div className="accept-offer-heading-group">
+                <div className="accept-offer-icon">
+                  <CheckCircle size={23} color="#059669" weight="fill" />
                 </div>
-                <div>
-                  <h2 className="farmer-modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800 }}>
+                <div className="accept-offer-heading-copy">
+                  <h2 className="farmer-modal-title accept-offer-title">
                     Terima Penawaran?
                   </h2>
-                  <p className="farmer-modal-sub" style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  <p className="farmer-modal-sub accept-offer-sub">
                     Pastikan informasi penawaran sudah sesuai sebelum Anda menerima penawaran ini.
                   </p>
                 </div>
               </div>
               {!isProcessing && (
-                <button type="button" onClick={handleCloseAcceptModal} className="farmer-modal-close-btn">
+                <button type="button" onClick={handleCloseAcceptModal} className="farmer-modal-close-btn accept-offer-close" aria-label="Tutup dialog">
                   <X size={18} />
                 </button>
               )}
             </div>
 
-            <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div className="accept-offer-content">
               {/* Summary Box */}
-              <div style={{
-                background: 'var(--bg-canvas-subtle)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '12px',
-                padding: '1rem',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '0.75rem'
-              }}>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Komoditas</span>
-                  <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '2px' }}>
+              <div className="accept-offer-summary">
+                <div className="accept-offer-product">
+                  <span className="accept-offer-label">Komoditas</span>
+                  <div className="accept-offer-product-name">
                     {selectedOfferForAccept.commodityName}
                   </div>
                 </div>
 
-                <div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Jumlah Dibutuhkan</span>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#5452f6', marginTop: '2px' }}>
+                <div className="accept-offer-metric">
+                  <span className="accept-offer-label">Jumlah Dibutuhkan</span>
+                  <div className="accept-offer-value quantity">
                     {Number(selectedOfferForAccept.requestedKg || (selectedOfferForAccept.requestedTon * 1000)).toLocaleString('id-ID')} kg
-                    <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-secondary)', marginLeft: '3px' }}>
+                    <span className="accept-offer-unit">
                       ({selectedOfferForAccept.requestedTon} Ton)
                     </span>
                   </div>
                 </div>
 
-                <div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Harga / kg</span>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#059669', marginTop: '2px' }}>
+                <div className="accept-offer-metric">
+                  <span className="accept-offer-label">Harga / kg</span>
+                  <div className="accept-offer-value price">
                     Rp {Number(selectedOfferForAccept.offeredPricePerKg || 0).toLocaleString('id-ID')}
                   </div>
                 </div>
 
-                <div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Total Penawaran</span>
-                  <div style={{ fontSize: '1rem', fontWeight: 800, color: '#059669', fontFamily: 'var(--font-mono, sans-serif)', marginTop: '2px' }}>
+                <div className="accept-offer-metric total">
+                  <span className="accept-offer-label">Total Penawaran</span>
+                  <div className="accept-offer-value total-value">
                     Rp {Number(selectedOfferForAccept.totalOfferValue || 0).toLocaleString('id-ID')}
                   </div>
                 </div>
 
-                <div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Metode Pembayaran</span>
-                  <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '2px' }}>
-                    {selectedOfferForAccept.paymentMethod || 'Transfer Bank'}
+                <div className="accept-offer-metric payment">
+                  <span className="accept-offer-label">Metode Pembayaran</span>
+                  <div className="accept-offer-value payment-value">
+                    {String(selectedOfferForAccept.paymentMethod || 'Transfer Bank').replace(/\s*\(\s*VA\s*Escrow\s*\)/i, '')}
                   </div>
                 </div>
               </div>
             </div>
 
-            <div style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px',
-              padding: '1rem 1.5rem',
-              borderTop: '1px solid var(--border-subtle)',
-              background: 'var(--bg-canvas)'
-            }}>
+            <div className="accept-offer-footer">
               <button
                 type="button"
                 onClick={handleCloseAcceptModal}
@@ -1485,20 +1447,7 @@ export default function PenawaranPetani({
                 type="button"
                 onClick={handleConfirmAccept}
                 disabled={isProcessing}
-                style={{
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  border: 'none',
-                  color: '#ffffff',
-                  padding: '0.55rem 1.25rem',
-                  borderRadius: 'var(--radius-pill)',
-                  fontWeight: 700,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.28)'
-                }}
+                className="accept-offer-confirm"
               >
                 {isProcessing ? (
                   <>
@@ -1728,7 +1677,7 @@ export default function PenawaranPetani({
                 <input
                   type="number"
                   min="1"
-                  step="50"
+                  step="1"
                   value={counterPrice}
                   onChange={(e) => { setCounterPrice(e.target.value); setCounterError(''); }}
                   placeholder="Misal: 28000"

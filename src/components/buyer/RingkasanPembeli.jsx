@@ -5,7 +5,6 @@ import {
   TrendDown, 
   Plus, 
   ArrowRight,
-  ArrowUp,
   Buildings,
   CheckCircle,
   CurrencyCircleDollar,
@@ -114,6 +113,7 @@ export default function BuyerCloneOverview({
   offers = [], 
   commodities = [],
   transactions = [],
+  payments = null,
   proposals = [],
   buyerProfile = null,
   onOpenOfferModal,
@@ -122,9 +122,41 @@ export default function BuyerCloneOverview({
   const displayPrices = marketPrices || [];
   const displayOffers = offers || [];
   const displayTransactions = transactions || [];
+  const [activeTimeframe, setActiveTimeframe] = useState('Max');
 
   const totalVolumeTon = displayTransactions.reduce((acc, curr) => acc + (Number(curr.volumeTon) || 0), 0);
-  const totalSpent = displayTransactions.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+  const paymentRows = Array.isArray(payments) ? payments : displayTransactions;
+  const successfullyPaidRows = paymentRows.filter((item) => {
+    const status = String(item.status || '').trim().toLowerCase();
+    return item.paymentStatus === 'paid'
+      || Boolean(item.paidAt)
+      || Boolean(item.paidDate)
+      || ['pembayaran berhasil', 'selesai', 'lunas', 'diproses', 'pelunasan'].includes(status)
+      || item.goodsStatus === 'diterima';
+  });
+
+  const nowMs = Date.now();
+  const timeframeStart = new Date(nowMs);
+  if (activeTimeframe === '1d') timeframeStart.setDate(timeframeStart.getDate() - 1);
+  else if (activeTimeframe === '7d') timeframeStart.setDate(timeframeStart.getDate() - 7);
+  else if (activeTimeframe === '30d') timeframeStart.setDate(timeframeStart.getDate() - 30);
+  else if (activeTimeframe === '16m') timeframeStart.setMonth(timeframeStart.getMonth() - 16);
+
+  const periodPaidRows = activeTimeframe === 'Max'
+    ? successfullyPaidRows
+    : successfullyPaidRows.filter((item) => {
+      const timestamp = item.paidAt || item.receivedAt || item.createdAt;
+      const timestampMs = timestamp ? new Date(timestamp).getTime() : NaN;
+      return Number.isFinite(timestampMs) && timestampMs >= timeframeStart.getTime() && timestampMs <= nowMs;
+    });
+  const totalSpent = periodPaidRows.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+  const timeframeLabels = {
+    '1d': '24 jam terakhir',
+    '7d': '7 hari terakhir',
+    '30d': '30 hari terakhir',
+    '16m': '16 bulan terakhir',
+    Max: 'seluruh waktu'
+  };
   const uniqueCommoditiesCount = new Set(displayTransactions.map(t => t.productName || t.commodityName).filter(Boolean)).size;
   const activeProposalsCount = (proposals || []).filter(p => p.status === 'Aktif').length || displayOffers.filter(o => o.status === 'Disetujui' || o.status === 'Aktif').length;
   const displayName = buyerProfile?.name ? buyerProfile.name.split(' ')[0] : 'Mitra';
@@ -140,8 +172,6 @@ export default function BuyerCloneOverview({
   ];
 
   const [hoveredMonthIndex, setHoveredMonthIndex] = useState(5); // Default active at Agu (index 5)
-  const [activeTimeframe, setActiveTimeframe] = useState('7d'); // Timeframe filter
-
   // Spline calculations
   const chartWidth = 360;
   const chartHeight = 98;
@@ -578,22 +608,27 @@ export default function BuyerCloneOverview({
               </div>
               
               <div className="clone-metric-compact-trend">
-                <span className="clone-trend-circle-icon">
-                  <ArrowUp size={8} weight="bold" />
-                </span>
-                <span>+Rp 45.200.000 (+2.5%)</span>
+                <CheckCircle size={14} weight="fill" />
+                <span>{periodPaidRows.length} transaksi dibayar · {timeframeLabels[activeTimeframe]}</span>
               </div>
 
-              {/* Timeframe Filter Pills: 1d, 7d, 30d, 16m, Max */}
+              {/* Periode untuk pengeluaran dari transaksi yang sudah dibayar */}
               <div className="clone-metric-compact-timeframes">
-                {['1d', '7d', '30d', '16m', 'Max'].map((tf) => (
+                {[
+                  { value: '1d', label: '1 hari' },
+                  { value: '7d', label: '7 hari' },
+                  { value: '30d', label: '30 hari' },
+                  { value: '16m', label: '16 bln' },
+                  { value: 'Max', label: 'Semua' }
+                ].map(({ value, label }) => (
                   <button
-                    key={tf}
+                    key={value}
                     type="button"
-                    className={`clone-metric-tf-btn ${activeTimeframe === tf ? 'active' : ''}`}
-                    onClick={() => setActiveTimeframe(tf)}
+                    className={`clone-metric-tf-btn ${activeTimeframe === value ? 'active' : ''}`}
+                    aria-pressed={activeTimeframe === value}
+                    onClick={() => setActiveTimeframe(value)}
                   >
-                    {tf}
+                    {label}
                   </button>
                 ))}
               </div>

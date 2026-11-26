@@ -376,7 +376,7 @@ export default function LaporkanMasalah({
       const payload = {
         userId: currentUser.id,
         userName: currentUser.fullName || currentUser.name || (userRole === 'petani' ? 'Petani Minahasa' : 'Pembeli Grosir'),
-        userEmail: currentUser.email || `${userRole}@taniniaga.id`,
+        userEmail: currentUser.email || `${userRole}@agriconnect.id`,
         userRole: currentUser.role || userRole,
         category,
         title,

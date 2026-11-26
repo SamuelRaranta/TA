@@ -33,6 +33,7 @@ import {
   subscribeBugReports
 } from '../../lib/bugReportService';
 import { supabase } from '../../lib/supabaseClient';
+import { appToast } from '../../lib/appFeedback';
 
 export default function KelolaLaporanBug() {
   // Reports State
@@ -50,8 +51,8 @@ export default function KelolaLaporanBug() {
     } catch (e) {}
     return {
       id: null,
-      fullName: 'Admin Utama TaniNiaga',
-      email: 'admin@taniniaga.id',
+      fullName: 'Admin Utama AgriConnect',
+      email: 'admin@agriconnect.id',
       role: 'admin'
     };
   });
@@ -187,7 +188,7 @@ export default function KelolaLaporanBug() {
       loadReports();
     } catch (err) {
       console.error('Error updating report status:', err);
-      alert('Gagal memperbarui status: ' + err.message);
+      appToast('Gagal memperbarui status: ' + err.message, 'error');
     } finally {
       setIsUpdating(false);
     }

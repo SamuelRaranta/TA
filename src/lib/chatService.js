@@ -47,11 +47,11 @@ const FALLBACK_PROFILES = [
   },
   {
     id: 'c3333333-3333-3333-3333-333333333333',
-    full_name: 'Admin Utama TaniNiaga',
+    full_name: 'Admin Utama AgriConnect',
     role: 'admin',
     phone: '0812-0000-9999',
     group_name: null,
-    company_name: 'Pusat Operasional TaniNiaga Minahasa',
+    company_name: 'Pusat Operasional AgriConnect Minahasa',
     location: 'Kantor Pusat Kawangkoan, Minahasa',
     avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160&auto=format&fit=crop&q=80',
     commodity: 'Pengawas Legalitas & Escrow Transaksi'
@@ -71,8 +71,8 @@ export const createAdminWelcomeMessage = (userId, userRole = 'petani', userName 
     sender_id: DEFAULT_ADMIN_ID,
     receiver_id: userId,
     message: isBuyer
-      ? `Halo ${userName}, selamat datang di platform TaniNiaga! Saya Admin Layanan Pengadaan & Penjamin Escrow. Ruang obrolan ini langsung terhubung dengan Admin tanpa memerlukan persetujuan kontak. Anda dapat berdiskusi dengan kami kapan saja untuk verifikasi penawaran, konsultasi sistem escrow, atau rekomendasi pasokan komoditas dari petani Minahasa.`
-      : `Halo ${userName}, selamat datang di platform TaniNiaga! Saya Admin Pendamping Petani & Penjamin Transaksi. Ruang obrolan ini langsung terhubung dengan Admin tanpa memerlukan persetujuan kontak. Anda dapat berkonsultasi dengan kami kapan saja mengenai verifikasi mutu komoditas, sertifikasi panen, hingga pendampingan kontrak jual-beli hasil tani Anda.`,
+      ? `Halo ${userName}, selamat datang di platform AgriConnect! Saya Admin Layanan Pengadaan & Penjamin Escrow. Ruang obrolan ini langsung terhubung dengan Admin tanpa memerlukan persetujuan kontak. Anda dapat berdiskusi dengan kami kapan saja untuk verifikasi penawaran, konsultasi sistem escrow, atau rekomendasi pasokan komoditas dari petani Minahasa.`
+      : `Halo ${userName}, selamat datang di platform AgriConnect! Saya Admin Pendamping Petani & Penjamin Transaksi. Ruang obrolan ini langsung terhubung dengan Admin tanpa memerlukan persetujuan kontak. Anda dapat berkonsultasi dengan kami kapan saja mengenai verifikasi mutu komoditas, sertifikasi panen, hingga pendampingan kontrak jual-beli hasil tani Anda.`,
     is_read: false,
     created_at: new Date(Date.now() - 3600000).toISOString()
   };
@@ -128,7 +128,7 @@ export const fetchRealProfiles = async () => {
 
       return {
         id: p.id,
-        full_name: p.full_name || fb.full_name || (p.email ? p.email.split('@')[0] : 'Pengguna TaniNiaga'),
+        full_name: p.full_name || fb.full_name || (p.email ? p.email.split('@')[0] : 'Pengguna AgriConnect'),
         role: resolvedRole,
         roleLabel: formatUserRole(resolvedRole),
         phone: p.phone || fb.phone || '-',
@@ -220,9 +220,9 @@ export const fetchUserConversations = async (currentUserId, currentUserRole) => 
   // 2. Pastikan percakapan dengan Admin selalu memiliki pesan pembuka resmi bagi pengguna baru
   const adminProfile = allProfiles.find(p => p.role === 'admin') || {
     id: DEFAULT_ADMIN_ID,
-    full_name: 'Admin Utama TaniNiaga',
+    full_name: 'Admin Utama AgriConnect',
     role: 'admin',
-    company_name: 'Pusat Operasional TaniNiaga Minahasa',
+    company_name: 'Pusat Operasional AgriConnect Minahasa',
     location: 'Kantor Layanan Minahasa',
     avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=160&auto=format&fit=crop&q=80'
   };
@@ -430,7 +430,7 @@ export const fetchIncomingChatRequests = async (currentUserId) => {
         return {
           id: r.id,
           senderId: r.sender_id,
-          name: sender.full_name || 'Pengguna TaniNiaga',
+          name: sender.full_name || 'Pengguna AgriConnect',
           company: sender.company_name || sender.group_name || 'Petani Produsen Minahasa',
           role: sender.role || 'petani',
           avatar: sender.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160&auto=format&fit=crop&q=80',
@@ -451,7 +451,7 @@ export const fetchIncomingChatRequests = async (currentUserId) => {
       return {
         id: r.id,
         senderId: r.sender_id,
-        name: sender.full_name || 'Pengguna TaniNiaga',
+        name: sender.full_name || 'Pengguna AgriConnect',
         company: sender.company_name || sender.group_name || 'Petani Produsen Minahasa',
         role: sender.role || 'petani',
         avatar: sender.avatar_url || 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160&auto=format&fit=crop&q=80',
@@ -565,7 +565,7 @@ export const fetchDirectoryUsers = async (currentUserId) => {
     return {
       id: p.id,
       name: p.full_name,
-      company: p.company_name || p.group_name || (p.role === 'admin' ? 'Admin TaniNiaga' : 'Mitra Petani'),
+      company: p.company_name || p.group_name || (p.role === 'admin' ? 'Admin AgriConnect' : 'Mitra Petani'),
       role: p.role,
       roleLabel: formatUserRole(p.role),
       avatar: p.avatar_url,

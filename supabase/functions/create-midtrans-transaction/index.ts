@@ -57,7 +57,7 @@ serve(async (req) => {
 
     // 4. Baca Body Request
     const body = await req.json().catch(() => ({}));
-    const { transaction_id, payment_method, bank_name, force_new } = body;
+    const { transaction_id, payment_method, force_new } = body;
 
     if (!transaction_id) {
       return new Response(
@@ -110,35 +110,24 @@ serve(async (req) => {
       );
     }
 
-    // 8. Tentukan filter payment method (QRIS vs Transfer Bank)
+    // 8. Batasi Snap ke kategori pembayaran yang dipilih pada transaksi.
     const methodStr = String(payment_method || trx.payment_method || "").toLowerCase();
-    const bankStr = String(bank_name || "").toLowerCase();
 
-    let enabledPayments: string[] | undefined = undefined;
-    let normalizedMethodCategory = "all";
+    let enabledPayments: string[];
+    let normalizedMethodCategory: string;
 
-    if (
-      methodStr === "qris" ||
-      methodStr === "gopay" ||
-      methodStr === "shopeepay"
-    ) {
-      // Jika pengguna secara spesifik memilih QRIS saja
-      enabledPayments = ["gopay", "qris", "shopeepay"];
+    if (methodStr.includes("qris")) {
+      enabledPayments = ["qris"];
       normalizedMethodCategory = "qris";
+    } else if (methodStr.includes("gopay")) {
+      enabledPayments = ["gopay"];
+      normalizedMethodCategory = "gopay";
+    } else if (methodStr.includes("shopeepay")) {
+      enabledPayments = ["shopeepay"];
+      normalizedMethodCategory = "shopeepay";
     } else {
-      // Untuk Transfer Bank & Escrow: sediakan seluruh bank VA (BCA, Mandiri, BRI, BNI, Permata) serta QRIS
-      // Tanpa metode asing seperti kartu kredit / cicilan paylater yang tidak relevan
-      enabledPayments = [
-        "bca_va",
-        "bni_va",
-        "bri_va",
-        "echannel",
-        "permata_va",
-        "other_va",
-        "gopay",
-        "qris",
-        "shopeepay"
-      ];
+      // Alias bank_transfer hanya mengizinkan kanal Virtual Account, tanpa QRIS/e-wallet.
+      enabledPayments = ["bank_transfer"];
       normalizedMethodCategory = "bank_transfer";
     }
 

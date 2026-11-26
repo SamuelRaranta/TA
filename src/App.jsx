@@ -6,6 +6,7 @@ import CommodityShowcase from './components/CommodityShowcase';
 import FeaturesSection from './components/FeaturesSection';
 import PortalAccessSection from './components/PortalAccessSection';
 import Footer from './components/Footer';
+import AppFeedbackHost from './components/common/AppFeedbackHost';
 import { supabase } from './lib/supabaseClient';
 import { notifyNewUserRegistered } from './lib/notificationService';
 
@@ -49,7 +50,7 @@ function ViewLoadingFallback({ message = 'Memuat modul aplikasi...' }) {
           }
         `}</style>
         <div style={{ fontSize: '0.94rem', fontWeight: 700, color: 'var(--text-primary, #1e293b)', marginBottom: '0.25rem' }}>
-          TaniNiaga
+          AgriConnect
         </div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #64748b)' }}>
           {message}
@@ -839,6 +840,7 @@ function AppContent() {
     <>
       <OfflineNetworkBanner isOnline={isOnline} showRestored={showOnlineRestored} />
       {renderCurrentView()}
+      <AppFeedbackHost />
     </>
   );
 }

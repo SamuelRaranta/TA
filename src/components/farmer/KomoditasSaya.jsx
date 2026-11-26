@@ -28,6 +28,7 @@ import {
   Carrot,
   CoffeeBean
 } from '@phosphor-icons/react';
+import { appToast, appConfirm } from '../../lib/appFeedback';
 import { DEFAULT_AVATAR } from '../../lib/constants';
 
 // Helper to normalize product status into 3 canonical values
@@ -90,11 +91,11 @@ export default function FarmerProducts({
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Mohon pilih file gambar yang valid (JPG, PNG, WebP).');
+        appToast('Mohon pilih file gambar yang valid (JPG, PNG, WebP).', 'error');
         return;
       }
       if (file.size > 5 * 1024 * 1024) {
-        alert('Ukuran file gambar maksimal 5MB.');
+        appToast('Ukuran file gambar maksimal 5MB.', 'error');
         return;
       }
       const reader = new FileReader();
@@ -277,8 +278,14 @@ export default function FarmerProducts({
   };
 
   // Delete Product
-  const handleDeleteProduct = (productId) => {
-    if (window.confirm('Apakah Anda yakin ingin menghapus komoditas ini dari daftar listing?')) {
+  const handleDeleteProduct = async (productId) => {
+    const confirmed = await appConfirm({
+      title: 'Hapus Komoditas Ini?',
+      message: 'Komoditas akan dihapus dari daftar listing Anda. Tindakan ini tidak dapat dibatalkan.',
+      tone: 'danger',
+      confirmLabel: 'Ya, Hapus'
+    });
+    if (confirmed) {
       setProductList(prev => prev.filter(p => p.id !== productId));
       if (onDeleteProduct) {
         onDeleteProduct(productId);

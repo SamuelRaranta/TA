@@ -2,13 +2,84 @@ import { supabase } from './supabaseClient';
 import { DEFAULT_AVATAR } from './constants';
 
 /**
- * Service untuk mengelola Review & Rating Petani di TaniNiaga.
+ * Service untuk mengelola Review & Rating Petani di AgriConnect.
  * 
  * Aturan Bisnis:
  * 1. Setiap petani memiliki data rating & ulasan yang terisolasi di Supabase.
  * 2. Nilai rating keseluruhan adalah rata-rata dari seluruh pembeli (misal 5 dan 4 -> 4.5).
  * 3. Jika petani belum memiliki ulasan, nilai rating default adalah 5.0 dengan 0 ulasan.
  */
+
+// Relasi ke profil pembeli. Nama & foto profil bisa berubah kapan saja,
+// sehingga data snapshot di farmer_reviews tidak boleh dijadikan sumber utama tampilan.
+const BUYER_PROFILE_EMBED = 'buyer:profiles!buyer_id(id, full_name, avatar_url)';
+
+/**
+ * Gabungkan data review dengan profil pembeli yang PALING BARU.
+ * Prioritas: profiles.full_name / profiles.avatar_url > snapshot di farmer_reviews.
+ */
+function applyCurrentBuyerProfile(review) {
+  if (!review || typeof review !== 'object') return review;
+
+  const buyer = review.buyer && typeof review.buyer === 'object' ? review.buyer : null;
+  const { buyer: _embeddedBuyer, ...rest } = review;
+
+  if (!buyer) {
+    return {
+      ...rest,
+      buyer_name: review.buyer_name || 'Pembeli Terverifikasi',
+      buyer_avatar: review.buyer_avatar || DEFAULT_AVATAR
+    };
+  }
+
+  return {
+    ...rest,
+    buyer_name: buyer.full_name || review.buyer_name || 'Pembeli Terverifikasi',
+    // Jika pembeli menghapus fotonya, tampilkan avatar default (bukan snapshot lama)
+    buyer_avatar: buyer.avatar_url || DEFAULT_AVATAR,
+    buyer_profile: buyer
+  };
+}
+
+/**
+ * Fallback bila embed relasi PostgREST tidak tersedia: ambil profil pembeli
+ * berdasarkan kumpulan buyer_id lalu gabungkan secara manual.
+ */
+async function hydrateBuyerProfiles(reviews = []) {
+  // Data hasil embed sudah memakai profil terbaru, tidak perlu query ulang.
+  const needsHydration = reviews.some((r) => r.buyer_id && !r.buyer_profile);
+  if (!needsHydration) return reviews;
+
+  const buyerIds = [...new Set(reviews.map((r) => r.buyer_id).filter(Boolean))];
+  if (buyerIds.length === 0) return reviews;
+
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', buyerIds);
+
+    if (error || !Array.isArray(profiles)) return reviews;
+
+    const profileMap = new Map(profiles.map((p) => [p.id, p]));
+    return reviews.map((review) => {
+      const profile = profileMap.get(review.buyer_id);
+      if (!profile) return applyCurrentBuyerProfile(review);
+      return applyCurrentBuyerProfile({ ...review, buyer: profile });
+    });
+  } catch (err) {
+    console.warn('[reviewService] Gagal memuat profil pembeli:', err);
+    return reviews;
+  }
+}
+
+/**
+ * Hapus objek profil hasil embed sebelum disimpan ke localStorage agar
+ * tidak menggandakan data avatar (yang bisa berukuran besar).
+ */
+function toCachePayload(reviews = []) {
+  return reviews.map(({ buyer_profile, ...review }) => review);
+}
 
 // Fallback seed review per ID / nama jika tabel di Supabase belum dibuat
 const FALLBACK_SEED_REVIEWS = {
@@ -150,21 +221,37 @@ export async function fetchFarmerReviews(farmerId, farmerName = '') {
   try {
     if (farmerId) {
       // 1. Coba ambil dari tabel public.farmer_reviews di Supabase
-      const { data, error } = await supabase
+      //    beserta profil pembeli terbaru (nama & foto bisa berubah).
+      let { data, error } = await supabase
         .from('farmer_reviews')
-        .select('*')
+        .select(`*, ${BUYER_PROFILE_EMBED}`)
         .eq('farmer_id', farmerId)
         .order('created_at', { ascending: false });
 
+      if (error) {
+        // Fallback bila relasi embed tidak dikenali PostgREST
+        const fallback = await supabase
+          .from('farmer_reviews')
+          .select('*')
+          .eq('farmer_id', farmerId)
+          .order('created_at', { ascending: false });
+        data = fallback.data;
+        error = fallback.error;
+      }
+
       if (!error && Array.isArray(data)) {
-        // Simpan ke cache lokal
+        // Pastikan nama & foto mengikuti profil pembeli yang aktif
+        const reviews = data.map(applyCurrentBuyerProfile);
+        const hydratedReviews = await hydrateBuyerProfiles(reviews);
+
+        // Simpan ke cache lokal (tanpa objek profil agar hemat storage)
         try {
-          localStorage.setItem(cacheKey, JSON.stringify(data));
+          localStorage.setItem(cacheKey, JSON.stringify(toCachePayload(hydratedReviews)));
         } catch (e) {}
 
-        const summary = calculateRatingSummary(data);
+        const summary = calculateRatingSummary(hydratedReviews);
         return {
-          reviews: data,
+          reviews: hydratedReviews,
           ...summary
         };
       }
@@ -179,9 +266,10 @@ export async function fetchFarmerReviews(farmerId, farmerName = '') {
     if (cached) {
       const parsed = JSON.parse(cached);
       if (Array.isArray(parsed)) {
+        const hydrated = await hydrateBuyerProfiles(parsed.map(applyCurrentBuyerProfile));
         return {
-          reviews: parsed,
-          ...calculateRatingSummary(parsed)
+          reviews: hydrated,
+          ...calculateRatingSummary(hydrated)
         };
       }
     }
@@ -201,13 +289,14 @@ export async function fetchFarmerReviews(farmerId, farmerName = '') {
   }
 
   // Simpan seed awal ke localStorage agar persist
+  const hydratedSeed = await hydrateBuyerProfiles(seed.map(applyCurrentBuyerProfile));
   try {
-    localStorage.setItem(cacheKey, JSON.stringify(seed));
+    localStorage.setItem(cacheKey, JSON.stringify(toCachePayload(hydratedSeed)));
   } catch (e) {}
 
   return {
-    reviews: seed,
-    ...calculateRatingSummary(seed)
+    reviews: hydratedSeed,
+    ...calculateRatingSummary(hydratedSeed)
   };
 }
 
@@ -265,8 +354,10 @@ function updateLocalCache(farmerId, newReview) {
 export function subscribeFarmerReviews(farmerId, onReviewChange) {
   if (!farmerId) return () => {};
 
+  const channels = [];
+
   try {
-    const channel = supabase
+    const reviewChannel = supabase
       .channel(`farmer_reviews_${farmerId}`)
       .on(
         'postgres_changes',
@@ -281,11 +372,27 @@ export function subscribeFarmerReviews(farmerId, onReviewChange) {
         }
       )
       .subscribe();
+    channels.push(reviewChannel);
+
+    // Nama / foto profil pembeli bisa berubah tanpa perubahan pada tabel review.
+    // Pantau perubahan profil agar kartu ulasan ikut memperbarui identitas pembeli.
+    const buyerProfileChannel = supabase
+      .channel(`farmer_reviews_buyer_profiles_${farmerId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        () => {
+          fetchFarmerReviews(farmerId).then(onReviewChange);
+        }
+      )
+      .subscribe();
+    channels.push(buyerProfileChannel);
 
     return () => {
-      supabase.removeChannel(channel);
+      channels.forEach((channel) => supabase.removeChannel(channel));
     };
   } catch (e) {
+    channels.forEach((channel) => supabase.removeChannel(channel));
     return () => {};
   }
 }
@@ -297,7 +404,7 @@ export async function fetchBuyerReviews(buyerId = null) {
   try {
     let query = supabase
       .from('farmer_reviews')
-      .select('*')
+      .select(`*, ${BUYER_PROFILE_EMBED}`)
       .order('created_at', { ascending: false });
 
     if (buyerId) {
@@ -306,7 +413,8 @@ export async function fetchBuyerReviews(buyerId = null) {
 
     const { data, error } = await query;
     if (!error && Array.isArray(data)) {
-      return { data, error: null };
+      const reviews = data.map(applyCurrentBuyerProfile);
+      return { data: await hydrateBuyerProfiles(reviews), error: null };
     }
   } catch (err) {
     console.warn('[reviewService] Gagal fetch review pembeli dari Supabase:', err);

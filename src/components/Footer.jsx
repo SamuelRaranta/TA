@@ -45,7 +45,7 @@ export default function Footer({
                 <Plant size={20} color="#ffffff" weight="fill" />
               </div>
               <span style={{ fontSize: '1.3rem', fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>
-                Tani<span style={{ color: 'var(--accent-primary)' }}>Niaga</span>
+                Agri<span style={{ color: 'var(--accent-primary)' }}>Connect</span>
               </span>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: '290px', marginBottom: '1.5rem' }}>
@@ -149,8 +149,8 @@ export default function Footer({
               {!isMobileApp && (
                 <li className="desktop-only-footer-link">
                   <a 
-                    href="/downloads/TaniNiaga.apk" 
-                    download="TaniNiaga.apk"
+                    href="/downloads/AgriConnect.apk" 
+                    download="AgriConnect.apk"
                     style={{ 
                       color: '#0284c7', 
                       textDecoration: 'none',
@@ -178,7 +178,7 @@ export default function Footer({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Envelope size={16} color="var(--accent-primary)" />
-                support@taniniaga.id
+                support@agriconnect.id
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Phone size={16} color="var(--accent-primary)" />
@@ -204,7 +204,7 @@ export default function Footer({
           lineHeight: 1.55,
           marginBottom: '2rem'
         }}>
-          <strong style={{ color: 'var(--text-primary)' }}>Catatan Hukum & Operasional:</strong> TaniNiaga berperan sebagai penghubung (connector) dan platform kesepakatan komitmen penawaran awal (binding agreement). TaniNiaga tidak menyediakan armada logistik fisik maupun menampung pembayaran penuh (escrow otomatis). Pengecekan fisik komoditas dan transaksi pelunasan dilakukan langsung antar pihak setelah jadwal kesepakatan disetujui.
+          <strong style={{ color: 'var(--text-primary)' }}>Catatan Hukum & Operasional:</strong> AgriConnect berperan sebagai penghubung (connector) dan platform kesepakatan komitmen penawaran awal (binding agreement). AgriConnect tidak menyediakan armada logistik fisik maupun menampung pembayaran penuh (escrow otomatis). Pengecekan fisik komoditas dan transaksi pelunasan dilakukan langsung antar pihak setelah jadwal kesepakatan disetujui.
         </div>
 
         {/* Bottom Copyright */}
@@ -220,7 +220,7 @@ export default function Footer({
           paddingTop: '1.5rem'
         }}>
           <div>
-            © 2026 TaniNiaga Indonesia. Seluruh hak cipta dilindungi undang-undang.
+            © 2026 AgriConnect Indonesia. Seluruh hak cipta dilindungi undang-undang.
           </div>
           <div style={{ display: 'flex', gap: '1.25rem' }}>
             <a href="#terms" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>Syarat & Ketentuan</a>

@@ -24,6 +24,7 @@ import {
   updateProcurementStatusInSupabase,
   subscribeProcurementProposals
 } from '../../lib/procurementService';
+import { appToast } from '../../lib/appFeedback';
 
 export default function AdminProcurementView() {
   const [procurements, setProcurements] = useState([]);
@@ -115,12 +116,6 @@ export default function AdminProcurementView() {
     return 'Menunggu Persetujuan';
   };
 
-  // Summary Metrics Counts
-  const totalCount = procurements.length;
-  const pendingCount = procurements.filter(p => normalizeStatus(p.status) === 'Menunggu Persetujuan').length;
-  const activeCount = procurements.filter(p => normalizeStatus(p.status) === 'Aktif').length;
-  const inactiveCount = procurements.filter(p => normalizeStatus(p.status) === 'Tidak Aktif').length;
-
   // Handle Accept (Ubah ke Diterima / Aktif di Supabase)
   const handleAccept = async (id) => {
     // Optimistic local update
@@ -174,7 +169,7 @@ export default function AdminProcurementView() {
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Mohon pilih file gambar yang valid.');
+        appToast('Mohon pilih file gambar yang valid (JPG, PNG, WebP).', 'error');
         return;
       }
       const reader = new FileReader();
@@ -299,100 +294,7 @@ export default function AdminProcurementView() {
         </button>
       </div>
 
-      {/* ================= 2. 4 SUMMARY CARDS ================= */}
-      <div className="proposal-summary-grid">
-        
-        {/* Total Pengadaan */}
-        <button
-          type="button"
-          className={`proposal-summary-card ${statusFilter === 'Semua' ? 'active' : ''}`}
-          onClick={() => setStatusFilter('Semua')}
-          title="Tampilkan seluruh pengadaan"
-        >
-          <div className="proposal-summary-icon" style={{ background: 'rgba(84, 82, 246, 0.12)', color: '#5452f6' }}>
-            <FileText size={18} weight={statusFilter === 'Semua' ? 'fill' : 'bold'} />
-          </div>
-          <div className="proposal-summary-content">
-            <span className="proposal-summary-count">
-              {isLoading ? (
-                <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '2.5rem', height: '1.4rem', borderRadius: '4px' }} />
-              ) : (
-                totalCount
-              )}
-            </span>
-            <span className="proposal-summary-label">Total Pengadaan</span>
-          </div>
-        </button>
-
-        {/* Menunggu Persetujuan */}
-        <button
-          type="button"
-          className={`proposal-summary-card ${statusFilter === 'Menunggu Persetujuan' ? 'active' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Menunggu Persetujuan' ? 'Semua' : 'Menunggu Persetujuan')}
-          title="Proposal yang menunggu verifikasi admin"
-        >
-          <div className="proposal-summary-icon" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
-            <Clock size={18} weight={statusFilter === 'Menunggu Persetujuan' ? 'fill' : 'bold'} />
-          </div>
-          <div className="proposal-summary-content">
-            <span className="proposal-summary-count" style={{ color: '#d97706' }}>
-              {isLoading ? (
-                <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '2.5rem', height: '1.4rem', borderRadius: '4px' }} />
-              ) : (
-                pendingCount
-              )}
-            </span>
-            <span className="proposal-summary-label">Menunggu Persetujuan</span>
-          </div>
-        </button>
-
-        {/* Diterima / Aktif */}
-        <button
-          type="button"
-          className={`proposal-summary-card ${statusFilter === 'Aktif' ? 'active' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Aktif' ? 'Semua' : 'Aktif')}
-          title="Proposal yang telah diterima dan aktif"
-        >
-          <div className="proposal-summary-icon" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10b981' }}>
-            <CheckCircle size={18} weight={statusFilter === 'Aktif' ? 'fill' : 'bold'} />
-          </div>
-          <div className="proposal-summary-content">
-            <span className="proposal-summary-count" style={{ color: '#059669' }}>
-              {isLoading ? (
-                <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '2.5rem', height: '1.4rem', borderRadius: '4px' }} />
-              ) : (
-                activeCount
-              )}
-            </span>
-            <span className="proposal-summary-label">Diterima (Aktif)</span>
-          </div>
-        </button>
-
-        {/* Ditolak / Tidak Aktif */}
-        <button
-          type="button"
-          className={`proposal-summary-card ${statusFilter === 'Tidak Aktif' ? 'active' : ''}`}
-          onClick={() => setStatusFilter(statusFilter === 'Tidak Aktif' ? 'Semua' : 'Tidak Aktif')}
-          title="Proposal yang ditolak atau tidak aktif"
-        >
-          <div className="proposal-summary-icon" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }}>
-            <XCircle size={18} weight={statusFilter === 'Tidak Aktif' ? 'fill' : 'bold'} />
-          </div>
-          <div className="proposal-summary-content">
-            <span className="proposal-summary-count" style={{ color: '#dc2626' }}>
-              {isLoading ? (
-                <span className="agri-skeleton-pulse" style={{ display: 'inline-block', width: '2.5rem', height: '1.4rem', borderRadius: '4px' }} />
-              ) : (
-                inactiveCount
-              )}
-            </span>
-            <span className="proposal-summary-label">Ditolak</span>
-          </div>
-        </button>
-
-      </div>
-
-      {/* ================= 3. SEARCH DAN FILTER ================= */}
+      {/* ================= SEARCH DAN FILTER ================= */}
       <div className="proposal-filter-bar">
         
         {/* Search Bar */}

@@ -41,6 +41,58 @@ import {
 } from '../../lib/dealService';
 import { supabase } from '../../lib/supabaseClient';
 
+let midtransSnapSdkPromise = null;
+
+const ensureMidtransSnapSdk = () => {
+  if (typeof window !== 'undefined' && window.snap?.pay) return Promise.resolve(window.snap);
+  if (midtransSnapSdkPromise) return midtransSnapSdkPromise;
+
+  const clientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
+  if (!clientKey) return Promise.reject(new Error('Client Key Midtrans belum diatur pada VITE_MIDTRANS_CLIENT_KEY.'));
+
+  const isProduction = import.meta.env.VITE_MIDTRANS_IS_PRODUCTION === 'true';
+  const scriptUrl = isProduction
+    ? 'https://app.midtrans.com/snap/snap.js'
+    : 'https://app.sandbox.midtrans.com/snap/snap.js';
+
+  midtransSnapSdkPromise = new Promise((resolve, reject) => {
+    let script = document.querySelector('script[data-agriconnect-midtrans-snap]');
+    const onLoad = () => {
+      if (window.snap?.pay) resolve(window.snap);
+      else reject(new Error('Snap SDK berhasil dimuat, tetapi fungsi pembayaran belum tersedia.'));
+    };
+    const onError = () => {
+      script?.remove();
+      reject(new Error('Snap SDK Midtrans gagal dimuat. Periksa koneksi dan Client Key.'));
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.src = scriptUrl;
+      script.async = true;
+      script.referrerPolicy = 'no-referrer';
+      script.dataset.agriconnectMidtransSnap = 'true';
+      script.setAttribute('data-client-key', clientKey);
+      script.addEventListener('load', onLoad, { once: true });
+      script.addEventListener('error', onError, { once: true });
+      document.head.appendChild(script);
+      return;
+    }
+
+    if (window.snap?.pay) {
+      resolve(window.snap);
+    } else {
+      script.addEventListener('load', onLoad, { once: true });
+      script.addEventListener('error', onError, { once: true });
+    }
+  }).catch((error) => {
+    midtransSnapSdkPromise = null;
+    throw error;
+  });
+
+  return midtransSnapSdkPromise;
+};
+
 export default function BuyerPayment({ 
   payments = [], 
   onNavigate,
@@ -208,6 +260,7 @@ export default function BuyerPayment({
   const [copiedId, setCopiedId] = useState(false);
   const [isProcessingPay, setIsProcessingPay] = useState(false);
   const [processingPaymentId, setProcessingPaymentId] = useState(null);
+  const midtransFlowActiveRef = useRef(false);
   const [uploadedProof, setUploadedProof] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -418,8 +471,9 @@ export default function BuyerPayment({
   // Integrasi Midtrans Snap Sandbox (TASK 7)
   const handlePayWithMidtrans = async (targetItem) => {
     const item = targetItem || payModalItem;
-    if (!item) return;
+    if (!item || midtransFlowActiveRef.current) return;
 
+    midtransFlowActiveRef.current = true;
     const itemId = item.dbId || item.id;
     setProcessingPaymentId(itemId);
     setIsProcessingPay(true);
@@ -430,7 +484,7 @@ export default function BuyerPayment({
           transaction_id: trxIdentifier,
           payment_method: item.method,
           bank_name: item.bankName,
-          force_new: true
+          force_new: false
         }
       });
 
@@ -447,40 +501,37 @@ export default function BuyerPayment({
       }
 
       const snapToken = data.token;
-
-      if (window.snap && typeof window.snap.pay === 'function') {
-        window.snap.pay(snapToken, {
+      const snap = await ensureMidtransSnapSdk();
+      snap.pay(snapToken, {
           onSuccess: function (result) {
+            midtransFlowActiveRef.current = false;
             showToast(`Pembayaran ${item.invoiceNumber} berhasil diproses!`);
             setPayModalItem(null);
             setProcessingPaymentId(null);
             window.dispatchEvent(new CustomEvent('agriconnect:refresh-transactions'));
           },
           onPending: function (result) {
+            midtransFlowActiveRef.current = false;
             showToast(`Menunggu penyelesaian pembayaran ${item.invoiceNumber}.`);
             setPayModalItem(null);
             setProcessingPaymentId(null);
             window.dispatchEvent(new CustomEvent('agriconnect:refresh-transactions'));
           },
           onError: function (result) {
+            midtransFlowActiveRef.current = false;
             console.warn('[Midtrans] Error callback:', result);
             showToast(`Pembayaran ${item.invoiceNumber} gagal atau dibatalkan.`);
             setProcessingPaymentId(null);
             window.dispatchEvent(new CustomEvent('agriconnect:refresh-transactions'));
           },
           onClose: function () {
+            midtransFlowActiveRef.current = false;
             setProcessingPaymentId(null);
             showToast('Jendela pembayaran Snap ditutup.');
           }
         });
-      } else if (data.redirect_url) {
-        setProcessingPaymentId(null);
-        window.open(data.redirect_url, '_blank');
-        showToast('Membuka tautan pembayaran Midtrans di tab baru...');
-      } else {
-        throw new Error('Snap SDK Midtrans belum siap di peramban. Silakan muat ulang halaman.');
-      }
     } catch (err) {
+      midtransFlowActiveRef.current = false;
       console.error('[PembayaranPembeli] Gagal Midtrans Pay:', err);
       showToast(`Kendala pembayaran: ${err.message || err}`);
     } finally {
