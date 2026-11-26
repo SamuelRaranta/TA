@@ -147,8 +147,15 @@ export default function PenawaranPetani({
   // Helper mengecek apakah suatu penawaran sudah kedaluwarsa / kadaluarsa
   const isExpired = useCallback((offer) => {
     if (!offer) return false;
-    const st = String(offer.status || '').toLowerCase();
+    const st = String(offer.status || '').trim().toLowerCase();
     if (st.includes('daluarsa') || st.includes('expired')) return true;
+
+    // Masa berlaku hanya menentukan status penawaran yang masih menunggu.
+    // Kesepakatan yang sudah diterima tidak berubah menjadi kedaluwarsa hanya
+    // karena tanggal proposal awalnya sudah lewat.
+    if (['diterima', 'disetujui', 'accepted', 'approved', 'ditolak', 'rejected', 'dibatalkan', 'batal', 'cancelled', 'canceled'].includes(st)) {
+      return false;
+    }
 
     const dateStr = offer.rawValidUntil || offer.validUntil;
     if (dateStr) {

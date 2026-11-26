@@ -61,7 +61,6 @@ import {
 } from '../../lib/commodityService';
 import {
   fetchActiveProcurementProposalsFromSupabase,
-  fetchProcurementProposalsFromSupabase,
   updateProcurementStatusInSupabase,
   subscribeProcurementProposals,
   mapProposalToOfferItem
@@ -480,15 +479,7 @@ export default function FarmerDashboard({
     const loadActiveProposals = async () => {
       try {
         const { data } = await fetchActiveProcurementProposalsFromSupabase();
-        if (isMounted && data && data.length > 0) {
-          const mappedOffers = data.map(mapProposalToOfferItem);
-          setBuyerOffers(mappedOffers);
-        } else if (isMounted) {
-          const { data: allData } = await fetchProcurementProposalsFromSupabase();
-          if (allData && allData.length > 0) {
-            setBuyerOffers(allData.map(mapProposalToOfferItem));
-          }
-        }
+        if (isMounted) setBuyerOffers((data || []).map(mapProposalToOfferItem));
       } catch (err) {
         console.warn('[FarmerDashboard] Gagal memuat proposal pengadaan aktif dari Supabase:', err);
       }
@@ -732,7 +723,8 @@ export default function FarmerDashboard({
     const priceKg = Number(targetOffer.counterPricePerKg || targetOffer.offeredPricePerKg || targetOffer.pricePerKg || 0);
     const totalVal = (reqTon * 1000) * priceKg;
 
-    // 1. Resolve komoditas: link eksplisit (UUID) atau cocokkan nama di katalog sendiri.
+    // Hubungkan ke stok petani bila ada. Proposal procurement yang aktif tetap
+    // dapat diterima tanpa baris komoditas terpisah di inventaris petani.
     const normName = (s) => String(s || '').toLowerCase().trim();
     const isUuidLike = (v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v || '');
     let commodityId = isUuidLike(targetOffer.commodityId) ? targetOffer.commodityId : null;
@@ -743,15 +735,6 @@ export default function FarmerDashboard({
         ['aktif', 'tersedia', 'disetujui'].includes(String(c.status || '').trim().toLowerCase())
       );
       if (match) commodityId = match.id;
-    }
-    if (!commodityId) {
-      appAlert({
-        title: 'Komoditas Belum Siap Ditawarkan',
-        message: `Komoditas ${targetOffer.commodityName || ''} belum terdaftar dan disetujui di Komoditas Saya. Daftarkan komoditas tersebut terlebih dahulu sebelum menerima penawaran.`,
-        tone: 'warning',
-        confirmLabel: 'Mengerti'
-      });
-      return false;
     }
 
     // Optimistic UI

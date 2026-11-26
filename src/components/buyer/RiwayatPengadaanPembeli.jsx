@@ -731,26 +731,22 @@ export default function BuyerOfferList({
                     <div style={{ textAlign: 'center' }}>
                       <span
                         style={{
-                          display: 'inline-flex',
+                          display: isCounterOffer ? 'inline' : 'inline-flex',
                           alignItems: 'center',
                           gap: '5px',
-                          padding: '0.24rem 0.65rem',
+                          padding: isCounterOffer ? 0 : '0.24rem 0.65rem',
                           borderRadius: '7px',
-                          fontWeight: 700,
+                          fontWeight: isCounterOffer ? 600 : 700,
                           fontSize: '0.7rem',
-                          background: isDiterima
+                          background: isCounterOffer ? 'transparent' : isDiterima
                             ? 'rgba(16, 185, 129, 0.12)'
-                            : isCounterOffer
-                            ? 'rgba(139, 92, 246, 0.12)'
                             : isMenunggu
                             ? 'rgba(245, 158, 11, 0.14)'
                             : isDibatalkan
                             ? 'rgba(100, 116, 139, 0.12)'
                             : 'rgba(239, 68, 68, 0.10)',
-                          color: isDiterima
+                          color: isCounterOffer ? 'var(--text-secondary)' : isDiterima
                             ? '#059669'
-                            : isCounterOffer
-                            ? '#7c3aed'
                             : isMenunggu
                             ? '#b45309'
                             : isDibatalkan
@@ -760,7 +756,6 @@ export default function BuyerOfferList({
                         }}
                       >
                         {isDiterima && <CheckCircle size={12} weight="fill" />}
-                        {isCounterOffer && <ArrowsClockwise size={12} weight="bold" />}
                         {isMenunggu && <Clock size={12} weight="bold" />}
                         {isDibatalkan && <X size={12} weight="bold" />}
                         {isDitolak && <XCircle size={12} weight="fill" />}

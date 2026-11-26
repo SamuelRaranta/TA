@@ -1463,56 +1463,6 @@ export default function AuthPage({
                       </button>
                     </div>
 
-                    {/* Quick Demo Credentials Info Box */}
-                    {mode === 'login' && (
-                      <div style={{
-                        margin: '0.65rem 0 0.85rem 0',
-                        padding: '0.55rem 0.85rem',
-                        background: 'rgba(84, 82, 246, 0.05)',
-                        border: '1px dashed rgba(84, 82, 246, 0.3)',
-                        borderRadius: '10px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px'
-                      }}>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--accent-primary)', display: 'block' }}>
-                            {role === 'petani' ? '💡 Akun Demo Petani: Hengky Mandagi' : '💡 Akun Demo Pembeli: Hendra Pratama'}
-                          </span>
-                          <span style={{ fontSize: '0.72rem' }}>
-                            {role === 'petani' ? 'petani@agriconnect.id' : 'pembeli@agriconnect.id'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (role === 'petani') {
-                              setEmail('petani@agriconnect.id');
-                              setPassword('petani123');
-                            } else {
-                              setEmail('pembeli@agriconnect.id');
-                              setPassword('pembeli123');
-                            }
-                            setErrorMessage('');
-                          }}
-                          style={{
-                            fontSize: '0.72rem',
-                            fontWeight: 700,
-                            padding: '4px 10px',
-                            background: 'var(--accent-primary)',
-                            color: '#ffffff',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap'
-                          }}
-                        >
-                          Isi Otomatis
-                        </button>
-                      </div>
-                    )}
-
                     {/* Error Feedback Alert */}
                     {errorMessage && (
                       <div style={{ 

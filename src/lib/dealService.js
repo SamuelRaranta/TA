@@ -78,7 +78,9 @@ export const mapRowToOffer = (row) => {
 
   // Expiry calculation: if pending and validUntil is in the past, treat as Kedaluwarsa
   let finalStatus = row.status || 'Menunggu Respon';
-  if (finalStatus !== 'Diterima' && finalStatus !== 'Disetujui' && finalStatus !== 'Ditolak') {
+  const normalizedStatus = String(finalStatus).trim().toLowerCase();
+  const isTerminalStatus = ['diterima', 'disetujui', 'accepted', 'approved', 'ditolak', 'rejected', 'dibatalkan', 'batal', 'cancelled', 'canceled'].includes(normalizedStatus);
+  if (!isTerminalStatus) {
     if (validUntil) {
       try {
         const expDate = new Date(validUntil);
